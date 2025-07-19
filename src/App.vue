@@ -1,22 +1,38 @@
-<script setup>
-import { ref, onMounted, computed } from "vue";
+<script setup lang="ts">
+import { ref, onMounted, computed, Ref } from "vue";
 
-const videos = ref([]);
-const isLoading = ref(false);
-const successMessage = ref("");
-const errorMessage = ref("");
-const canScan = ref(false);
-const scanButtonText = ref("Scan Current Page");
-const sortBy = ref("duration");
-const channelFilter = ref([]);
+interface VideoData {
+  title: string;
+  duration: string;
+  url: string;
+  videoId: string;
+  channel: string;
+  channelUrl: string;
+  views: string;
+  publishedTime: string;
+  thumbnail: string;
+  description: string;
+  durationInSeconds: number;
+  viewsCount: number;
+  isLong: boolean;
+}
 
-const uniqueChannels = computed(() => {
-    const channels = videos.value.map((video) => video.channel).filter(Boolean);
+const videos: Ref<VideoData[]> = ref([]);
+const isLoading: Ref<boolean> = ref(false);
+const successMessage: Ref<string> = ref("");
+const errorMessage: Ref<string> = ref("");
+const canScan: Ref<boolean> = ref(false);
+const scanButtonText: Ref<string> = ref("Scan Current Page");
+const sortBy: Ref<string> = ref("duration");
+const channelFilter: Ref<string[]> = ref([]);
+
+const uniqueChannels = computed((): string[] => {
+    const channels = videos.value.map((video: VideoData) => video.channel).filter(Boolean);
     return [...new Set(channels)].sort();
 });
 
-const filteredVideos = computed(() => {
-    let filtered = videos.value;
+const filteredVideos = computed((): VideoData[] => {
+    let filtered: VideoData[] = videos.value;
 
     // Apply channel filter
     if (channelFilter.value.length > 0) {
@@ -26,7 +42,7 @@ const filteredVideos = computed(() => {
     }
 
     // Apply sorting
-    filtered = [...filtered].sort((a, b) => {
+    filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
         switch (sortBy.value) {
             case "duration":
                 return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
@@ -44,7 +60,7 @@ const filteredVideos = computed(() => {
     return filtered;
 });
 
-const showMessage = (message, type = "success") => {
+const showMessage = (message: string, type: string = "success"): void => {
     if (type === "success") {
         successMessage.value = message;
         errorMessage.value = "";
@@ -60,7 +76,7 @@ const showMessage = (message, type = "success") => {
     }
 };
 
-const loadInitialData = async () => {
+const loadInitialData = async (): Promise<void> => {
     try {
         // Test background script connectivity
         try {
@@ -80,11 +96,11 @@ const loadInitialData = async () => {
 
         await checkCurrentTab();
     } catch (error) {
-        showMessage("Error loading data: " + error.message, "error");
+        showMessage("Error loading data: " + (error as Error).message, "error");
     }
 };
 
-const checkCurrentTab = async () => {
+const checkCurrentTab = async (): Promise<void> => {
     try {
         const [tab] = await chrome.tabs.query({
             active: true,
@@ -103,7 +119,7 @@ const checkCurrentTab = async () => {
     }
 };
 
-const scanCurrentPage = async () => {
+const scanCurrentPage = async (): Promise<void> => {
     isLoading.value = true;
 
     try {
@@ -129,13 +145,13 @@ const scanCurrentPage = async () => {
             setTimeout(() => loadInitialData(), 1000);
         }
     } catch (error) {
-        showMessage("Error scanning page: " + error.message, "error");
+        showMessage("Error scanning page: " + (error as Error).message, "error");
     } finally {
         isLoading.value = false;
     }
 };
 
-const addCurrentToQueue = async () => {
+const addCurrentToQueue = async (): Promise<void> => {
     if (filteredVideos.value.length === 0) {
         showMessage("No videos found", "error");
         return;
@@ -178,13 +194,13 @@ const addCurrentToQueue = async () => {
         }
     } catch (error) {
         console.error("Queue error:", error);
-        showMessage("Queue error: " + error.message, "error");
+        showMessage("Queue error: " + (error as Error).message, "error");
     } finally {
         isLoading.value = false;
     }
 };
 
-const openVideo = (video) => {
+const openVideo = (video: VideoData): void => {
     const url = video.url.startsWith("http")
         ? video.url
         : `https://www.youtube.com${video.url}`;

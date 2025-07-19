@@ -14,15 +14,11 @@
     </div>
 </template>
 
-<script setup>
-defineProps({
-    successMessage: {
-        type: String,
-        default: "",
-    },
-    errorMessage: {
-        type: String,
-        default: "",
-    },
-});
+<script setup lang="ts">
+interface Props {
+  successMessage?: string;
+  errorMessage?: string;
+}
+
+defineProps<Props>();
 </script>

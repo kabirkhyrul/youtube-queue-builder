@@ -74,33 +74,38 @@
             </svg>
         </div>
         <h3 class="text-sm font-medium text-gray-900 mb-1">
-            {{
-                videos.length === 0
-                    ? "No videos found yet"
-                    : "No videos match the current filter"
-            }}
+            No videos found yet
         </h3>
         <p class="text-sm text-gray-500">
-            {{
-                videos.length === 0
-                    ? "Scan a YouTube search page to find videos"
-                    : "Try adjusting your filters"
-            }}
+            Scan a YouTube search page to find videos
         </p>
-    </div>
-
-    <div v-if="isLoading" class="mt-4 text-center">
-        <div class="text-sm text-gray-600">Processing...</div>
     </div>
 </template>
 
-<script setup>
-defineProps({
-    filteredVideos: {
-        type: Array,
-        required: true,
-    },
-});
+<script setup lang="ts">
+interface VideoData {
+  title: string;
+  duration: string;
+  url: string;
+  videoId: string;
+  channel: string;
+  channelUrl: string;
+  views: string;
+  publishedTime: string;
+  thumbnail: string;
+  description: string;
+  durationInSeconds: number;
+  viewsCount: number;
+  isLong: boolean;
+}
 
-defineEmits(["open-video"]);
+interface Props {
+  filteredVideos: VideoData[];
+}
+
+defineProps<Props>();
+
+defineEmits<{
+  'open-video': [video: VideoData];
+}>();
 </script>

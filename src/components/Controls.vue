@@ -39,7 +39,7 @@
                 >
                 <select
                     :value="sortBy"
-                    @input="$emit('update:sortBy', $event.target.value)"
+                    @input="$emit('update:sortBy', ($event.target as HTMLSelectElement).value)"
                     class="w-full text-sm border border-gray-300 rounded px-3 py-2"
                 >
                     <option value="duration">Duration</option>
@@ -88,53 +88,48 @@
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps({
-    filteredVideos: {
-        type: Array,
-        required: true,
-    },
-    canScan: {
-        type: Boolean,
-        required: true,
-    },
-    isLoading: {
-        type: Boolean,
-        required: true,
-    },
-    scanButtonText: {
-        type: String,
-        required: true,
-    },
-    videos: {
-        type: Array,
-        required: true,
-    },
-    sortBy: {
-        type: String,
-        required: true,
-    },
-    channelFilter: {
-        type: Array,
-        required: true,
-    },
-    uniqueChannels: {
-        type: Array,
-        required: true,
-    },
-});
+interface VideoData {
+  title: string;
+  duration: string;
+  url: string;
+  videoId: string;
+  channel: string;
+  channelUrl: string;
+  views: string;
+  publishedTime: string;
+  thumbnail: string;
+  description: string;
+  durationInSeconds: number;
+  viewsCount: number;
+  isLong: boolean;
+}
 
-const emit = defineEmits([
-    'scanCurrentPage',
-    'addCurrentToQueue',
-    'update:sortBy',
-    'update:channelFilter',
-]);
+interface Props {
+  filteredVideos: VideoData[];
+  canScan: boolean;
+  isLoading: boolean;
+  scanButtonText: string;
+  videos: VideoData[];
+  sortBy: string;
+  channelFilter: string[];
+  uniqueChannels: string[];
+}
 
-const handleChannelFilterChange = (event) => {
-    const selectedOptions = Array.from(event.target.selectedOptions).map(option => option.value);
+const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  scanCurrentPage: [];
+  addCurrentToQueue: [];
+  'update:sortBy': [value: string];
+  'update:channelFilter': [value: string[]];
+}>();
+
+const handleChannelFilterChange = (event: Event): void => {
+    const target = event.target as HTMLSelectElement;
+    const selectedOptions = Array.from(target.selectedOptions).map(option => option.value);
     emit('update:channelFilter', selectedOptions);
 };
 

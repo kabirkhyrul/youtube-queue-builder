@@ -8,3 +8,7 @@
         </p>
     </div>
 </template>
+
+<script setup lang="ts">
+// Header component has no props or logic
+</script>
