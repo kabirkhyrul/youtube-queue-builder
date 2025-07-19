@@ -1,196 +1,199 @@
 <script setup>
-import { ref, computed } from "vue";
-import Header from "./components/Header.vue";
-import Notifications from "./components/Notifications.vue";
-import Controls from "./components/Controls.vue";
-import VideoList from "./components/VideoList.vue";
+import { ref, onMounted, computed } from "vue";
 
-// Reactive State
-const successMessage = ref("");
-const errorMessage = ref("");
 const videos = ref([]);
 const isLoading = ref(false);
+const successMessage = ref("");
+const errorMessage = ref("");
+const canScan = ref(false);
+const scanButtonText = ref("Scan Current Page");
 const sortBy = ref("duration");
 const channelFilter = ref([]);
 
-// This is a placeholder for extension logic.
-const canScan = computed(() => true);
-
-const scanButtonText = computed(() => {
-    if (isLoading.value) return "Scanning...";
-    if (videos.value.length > 0) return "Rescan Page";
-    return "Scan Page for Videos";
-});
-
 const uniqueChannels = computed(() => {
-    const channelNames = videos.value.map((video) => video.channel);
-    return [...new Set(channelNames)].sort();
+    const channels = videos.value.map((video) => video.channel).filter(Boolean);
+    return [...new Set(channels)].sort();
 });
 
 const filteredVideos = computed(() => {
-    // Create a copy to avoid sorting the original ref array in place
-    let processedVideos = [...videos.value];
+    let filtered = videos.value;
 
-    // Filter by selected channels
+    // Apply channel filter
     if (channelFilter.value.length > 0) {
-        processedVideos = processedVideos.filter((video) =>
+        filtered = filtered.filter((video) =>
             channelFilter.value.includes(video.channel),
         );
     }
 
-    // Sort the videos based on the raw numeric data
-    processedVideos.sort((a, b) => {
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
         switch (sortBy.value) {
             case "duration":
-                return b.duration - a.duration; // Descending
-            case "views":
-                return b.views - a.views; // Descending
+                return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
             case "title":
-                return a.title.localeCompare(b.title); // Ascending
+                return a.title.localeCompare(b.title);
             case "channel":
-                return a.channel.localeCompare(b.channel); // Ascending
+                return a.channel.localeCompare(b.channel);
+            case "views":
+                return (b.viewsCount || 0) - (a.viewsCount || 0);
             default:
                 return 0;
         }
     });
 
-    // Map to new objects with formatted strings for display in the component
-    return processedVideos.map((video) => {
-        const formatDuration = (secs) => {
-            if (isNaN(secs) || secs < 0) return "0:00";
-            const minutes = Math.floor(secs / 60);
-            const seconds = Math.floor(secs % 60);
-            return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-        };
-
-        const formatViews = (count) => {
-            if (isNaN(count) || count < 0) return "0 views";
-            if (count >= 1000000)
-                return `${(count / 1000000).toFixed(1)}M views`;
-            if (count >= 1000) return `${Math.floor(count / 1000)}K views`;
-            return `${count} views`;
-        };
-
-        return {
-            ...video,
-            duration: formatDuration(video.duration),
-            views: formatViews(video.views),
-        };
-    });
+    return filtered;
 });
 
-// --- Methods ---
+const showMessage = (message, type = "success") => {
+    if (type === "success") {
+        successMessage.value = message;
+        errorMessage.value = "";
+        setTimeout(() => {
+            successMessage.value = "";
+        }, 3000);
+    } else {
+        errorMessage.value = message;
+        successMessage.value = "";
+        setTimeout(() => {
+            errorMessage.value = "";
+        }, 5000);
+    }
+};
+
+const loadInitialData = async () => {
+    try {
+        // Test background script connectivity
+        try {
+            const testResponse = await chrome.runtime.sendMessage({
+                action: "test",
+            });
+            console.log("Background script test:", testResponse);
+        } catch (testError) {
+            console.warn("Background script test failed:", testError);
+        }
+
+        const data = await chrome.storage.local.get([
+            "videos",
+            "lastScanCount",
+        ]);
+        videos.value = data.videos || [];
+
+        await checkCurrentTab();
+    } catch (error) {
+        showMessage("Error loading data: " + error.message, "error");
+    }
+};
+
+const checkCurrentTab = async () => {
+    try {
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
+
+        if (tab.url && tab.url.includes("youtube.com/results")) {
+            scanButtonText.value = "Scan Current Page";
+            canScan.value = true;
+        } else {
+            scanButtonText.value = "Navigate to YouTube Search";
+            canScan.value = false;
+        }
+    } catch (error) {
+        console.error("Error checking current tab:", error);
+    }
+};
 
 const scanCurrentPage = async () => {
     isLoading.value = true;
-    errorMessage.value = "";
-    successMessage.value = "";
-    videos.value = [];
-    channelFilter.value = [];
 
-    // Simulate an async operation (e.g., communicating with a content script)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
 
-    // Mock data with raw numbers for sorting and strings for other metadata
-    videos.value = [
-        {
-            videoId: "v1",
-            title: "Getting Started with Vue 3",
-            channel: "Vue Mastery",
-            duration: 725,
-            views: 102345,
-            publishedTime: "1 year ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/007bff/ffffff?text=Vue",
-            description:
-                "Learn the basics of Vue 3 in this comprehensive tutorial.",
-        },
-        {
-            videoId: "v2",
-            title: "A Funky Beat",
-            channel: "Music Producer",
-            duration: 185,
-            views: 54321,
-            publishedTime: "6 months ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/28a745/ffffff?text=Music",
-            description: "A funky beat to chill/study to.",
-        },
-        {
-            videoId: "v3",
-            title: "How to Build a Chrome Extension",
-            channel: "Expert Coder",
-            duration: 1250,
-            views: 250123,
-            publishedTime: "2 years ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/ffc107/000000?text=Code",
-            description:
-                "Build a Chrome extension from scratch with Manifest V3.",
-        },
-        {
-            videoId: "v4",
-            title: "Vue 3 Composition API in Depth",
-            channel: "Vue Mastery",
-            duration: 2430,
-            views: 80456,
-            publishedTime: "11 months ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/007bff/ffffff?text=Vue",
-            description: "A deep dive into the Vue 3 Composition API.",
-        },
-        {
-            videoId: "v5",
-            title: "Unreal Engine 5 for Beginners",
-            channel: "Game Dev",
-            duration: 3610,
-            views: 500890,
-            publishedTime: "8 months ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/6c757d/ffffff?text=Game",
-            description:
-                "Everything you need to know to get started with Unreal Engine 5.",
-        },
-        {
-            videoId: "v6",
-            title: "Another Video by Expert Coder",
-            channel: "Expert Coder",
-            duration: 620,
-            views: 150000,
-            publishedTime: "3 months ago",
-            thumbnail:
-                "https://via.placeholder.com/128x96.png/ffc107/000000?text=Code",
-            description: "Another great video on modern web development.",
-        },
-    ];
+        if (!tab.url || !tab.url.includes("youtube.com/results")) {
+            showMessage(
+                "Please navigate to YouTube search results first",
+                "error",
+            );
+            return;
+        }
 
-    successMessage.value = `Found ${videos.value.length} videos on the page.`;
-    isLoading.value = false;
+        const response = await chrome.tabs.sendMessage(tab.id, {
+            action: "scanPage",
+        });
+
+        if (response.success) {
+            showMessage("Page scanned successfully!");
+            setTimeout(() => loadInitialData(), 1000);
+        }
+    } catch (error) {
+        showMessage("Error scanning page: " + error.message, "error");
+    } finally {
+        isLoading.value = false;
+    }
 };
 
 const addCurrentToQueue = async () => {
-    if (filteredVideos.value.length === 0) return;
+    if (filteredVideos.value.length === 0) {
+        showMessage("No videos found", "error");
+        return;
+    }
+
     isLoading.value = true;
-    errorMessage.value = "";
-    successMessage.value = "";
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    successMessage.value = `Successfully added ${filteredVideos.value.length} videos to your queue.`;
+    try {
+        console.log("Sending addCurrentToQueue message...");
+        console.log("Filtered videos to queue:", filteredVideos.value);
 
-    // Clear the list after adding to the queue
-    videos.value = [];
-    channelFilter.value = [];
-    isLoading.value = false;
+        const response = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Request timeout"));
+            }, 10000);
+
+            chrome.runtime.sendMessage(
+                {
+                    action: "addCurrentToQueue",
+                    videos: filteredVideos.value,
+                },
+                (response) => {
+                    clearTimeout(timeout);
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                },
+            );
+        });
+
+        console.log("Received response:", response);
+
+        if (response && response.success) {
+            showMessage(`Added ${response.count} videos to YouTube queue!`);
+        } else {
+            const errorMsg = response ? response.error : "No response received";
+            showMessage("Queue failed: " + errorMsg, "error");
+        }
+    } catch (error) {
+        console.error("Queue error:", error);
+        showMessage("Queue error: " + error.message, "error");
+    } finally {
+        isLoading.value = false;
+    }
 };
 
 const openVideo = (video) => {
-    console.log("Request to open video:", video.videoId, video.title);
-    // In a real Chrome extension, you would use:
-    // chrome.tabs.create({ url: `https://www.youtube.com/watch?v=${video.videoId}` });
-    const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
-    window.open(videoUrl, "_blank");
-    successMessage.value = `Opening "${video.title}" in a new tab.`;
+    const url = video.url.startsWith("http")
+        ? video.url
+        : `https://www.youtube.com${video.url}`;
+    window.open(url, "_blank");
 };
+
+onMounted(() => {
+    loadInitialData();
+});
 </script>
 
 <template>
