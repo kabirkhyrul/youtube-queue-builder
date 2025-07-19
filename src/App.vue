@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import Header from "./components/Header.vue";
 import Notifications from "./components/Notifications.vue";
 import Controls from "./components/Controls.vue";
+import VideoList from "./components/VideoList.vue";
 
 // Reactive State
 const successMessage = ref("");
@@ -12,13 +13,13 @@ const isLoading = ref(false);
 const sortBy = ref("duration");
 const channelFilter = ref([]);
 
-// This is a placeholder. In a real extension, you'd check if the current tab is a YouTube search page.
+// This is a placeholder for extension logic.
 const canScan = computed(() => true);
 
 const scanButtonText = computed(() => {
     if (isLoading.value) return "Scanning...";
-    if (videos.value.length > 0) return "Scan Again";
-    return "Scan Current Page";
+    if (videos.value.length > 0) return "Rescan Page";
+    return "Scan Page for Videos";
 });
 
 const uniqueChannels = computed(() => {
@@ -27,6 +28,7 @@ const uniqueChannels = computed(() => {
 });
 
 const filteredVideos = computed(() => {
+    // Create a copy to avoid sorting the original ref array in place
     let processedVideos = [...videos.value];
 
     // Filter by selected channels
@@ -36,7 +38,7 @@ const filteredVideos = computed(() => {
         );
     }
 
-    // Sort the videos
+    // Sort the videos based on the raw numeric data
     processedVideos.sort((a, b) => {
         switch (sortBy.value) {
             case "duration":
@@ -52,10 +54,33 @@ const filteredVideos = computed(() => {
         }
     });
 
-    return processedVideos;
+    // Map to new objects with formatted strings for display in the component
+    return processedVideos.map((video) => {
+        const formatDuration = (secs) => {
+            if (isNaN(secs) || secs < 0) return "0:00";
+            const minutes = Math.floor(secs / 60);
+            const seconds = Math.floor(secs % 60);
+            return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+        };
+
+        const formatViews = (count) => {
+            if (isNaN(count) || count < 0) return "0 views";
+            if (count >= 1000000)
+                return `${(count / 1000000).toFixed(1)}M views`;
+            if (count >= 1000) return `${Math.floor(count / 1000)}K views`;
+            return `${count} views`;
+        };
+
+        return {
+            ...video,
+            duration: formatDuration(video.duration),
+            views: formatViews(video.views),
+        };
+    });
 });
 
-// Mock function to simulate scanning the page for videos
+// --- Methods ---
+
 const scanCurrentPage = async () => {
     isLoading.value = true;
     errorMessage.value = "";
@@ -63,52 +88,79 @@ const scanCurrentPage = async () => {
     videos.value = [];
     channelFilter.value = [];
 
-    // Simulate an async operation like talking to a content script
+    // Simulate an async operation (e.g., communicating with a content script)
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Mock data for demonstration purposes
+    // Mock data with raw numbers for sorting and strings for other metadata
     videos.value = [
         {
-            id: "v1",
+            videoId: "v1",
             title: "Getting Started with Vue 3",
             channel: "Vue Mastery",
             duration: 725,
             views: 102345,
+            publishedTime: "1 year ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/007bff/ffffff?text=Vue",
+            description:
+                "Learn the basics of Vue 3 in this comprehensive tutorial.",
         },
         {
-            id: "v2",
+            videoId: "v2",
             title: "A Funky Beat",
             channel: "Music Producer",
             duration: 185,
             views: 54321,
+            publishedTime: "6 months ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/28a745/ffffff?text=Music",
+            description: "A funky beat to chill/study to.",
         },
         {
-            id: "v3",
+            videoId: "v3",
             title: "How to Build a Chrome Extension",
             channel: "Expert Coder",
             duration: 1250,
             views: 250123,
+            publishedTime: "2 years ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/ffc107/000000?text=Code",
+            description:
+                "Build a Chrome extension from scratch with Manifest V3.",
         },
         {
-            id: "v4",
+            videoId: "v4",
             title: "Vue 3 Composition API in Depth",
             channel: "Vue Mastery",
             duration: 2430,
             views: 80456,
+            publishedTime: "11 months ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/007bff/ffffff?text=Vue",
+            description: "A deep dive into the Vue 3 Composition API.",
         },
         {
-            id: "v5",
+            videoId: "v5",
             title: "Unreal Engine 5 for Beginners",
             channel: "Game Dev",
             duration: 3610,
             views: 500890,
+            publishedTime: "8 months ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/6c757d/ffffff?text=Game",
+            description:
+                "Everything you need to know to get started with Unreal Engine 5.",
         },
         {
-            id: "v6",
+            videoId: "v6",
             title: "Another Video by Expert Coder",
             channel: "Expert Coder",
             duration: 620,
             views: 150000,
+            publishedTime: "3 months ago",
+            thumbnail:
+                "https://via.placeholder.com/128x96.png/ffc107/000000?text=Code",
+            description: "Another great video on modern web development.",
         },
     ];
 
@@ -116,23 +168,28 @@ const scanCurrentPage = async () => {
     isLoading.value = false;
 };
 
-// Mock function to simulate adding videos to the YouTube queue
 const addCurrentToQueue = async () => {
     if (filteredVideos.value.length === 0) return;
-
     isLoading.value = true;
     errorMessage.value = "";
     successMessage.value = "";
 
-    // Simulate an async operation
     await new Promise((resolve) => setTimeout(resolve, 1500));
-
     successMessage.value = `Successfully added ${filteredVideos.value.length} videos to your queue.`;
 
     // Clear the list after adding to the queue
     videos.value = [];
     channelFilter.value = [];
     isLoading.value = false;
+};
+
+const openVideo = (video) => {
+    console.log("Request to open video:", video.videoId, video.title);
+    // In a real Chrome extension, you would use:
+    // chrome.tabs.create({ url: `https://www.youtube.com/watch?v=${video.videoId}` });
+    const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+    window.open(videoUrl, "_blank");
+    successMessage.value = `Opening "${video.title}" in a new tab.`;
 };
 </script>
 
@@ -154,4 +211,5 @@ const addCurrentToQueue = async () => {
         @scan-page="scanCurrentPage"
         @add-to-queue="addCurrentToQueue"
     />
+    <VideoList :filtered-videos="filteredVideos" @open-video="openVideo" />
 </template>
