@@ -4,7 +4,7 @@
             v-for="video in filteredVideos"
             :key="video.id"
             class="bg-white rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-            @click="$emit('open-video', video)"
+            @click="openVideo(video)"
         >
             <div class="flex space-x-4">
                 <div class="flex-shrink-0">
@@ -83,21 +83,7 @@
 </template>
 
 <script setup lang="ts">
-interface VideoData {
-  title: string;
-  duration: string;
-  url: string;
-  videoId: string;
-  channel: string;
-  channelUrl: string;
-  views: string;
-  publishedTime: string;
-  thumbnail: string;
-  description: string;
-  durationInSeconds: number;
-  viewsCount: number;
-  isLong: boolean;
-}
+import type { VideoData } from '../types';
 
 interface Props {
   filteredVideos: VideoData[];
@@ -105,7 +91,10 @@ interface Props {
 
 defineProps<Props>();
 
-defineEmits<{
-  'open-video': [video: VideoData];
-}>();
+const openVideo = (video: VideoData): void => {
+  const url = video.url.startsWith('http')
+    ? video.url
+    : `https://www.youtube.com${video.url}`;
+  window.open(url, '_blank');
+};
 </script>

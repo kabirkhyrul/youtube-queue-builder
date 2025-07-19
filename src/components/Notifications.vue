@@ -15,10 +15,28 @@
 </template>
 
 <script setup lang="ts">
-interface Props {
-  successMessage?: string;
-  errorMessage?: string;
-}
+import { ref, Ref } from 'vue';
 
-defineProps<Props>();
+const successMessage: Ref<string> = ref('');
+const errorMessage: Ref<string> = ref('');
+
+const showMessage = (message: string, type: string = 'success'): void => {
+  if (type === 'success') {
+    successMessage.value = message;
+    errorMessage.value = '';
+    setTimeout(() => {
+      successMessage.value = '';
+    }, 3000);
+  } else {
+    errorMessage.value = message;
+    successMessage.value = '';
+    setTimeout(() => {
+      errorMessage.value = '';
+    }, 5000);
+  }
+};
+
+defineExpose({
+  showMessage
+});
 </script>
