@@ -3,7 +3,7 @@
   "name": "YouTube Queue Builder",
   "version": "1.0",
   "description": "Scan YouTube search results, organize videos with smart filtering and sorting, then create custom playlists instantly",
-  "permissions": ["activeTab", "storage", "alarms", "sidePanel"],
+  "permissions": ["activeTab", "tabs", "storage", "alarms", "sidePanel"],
   "host_permissions": ["https://www.youtube.com/*"],
   "background": {
     "service_worker": "background.js"

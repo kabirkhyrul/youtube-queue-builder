@@ -71,19 +71,15 @@ class YouTubeVideoScanner {
   extractVideoData(videoElement: Element): VideoData | null {
     const $video = $(videoElement);
     const $titleEl = $video.find("#video-title");
-    const $durationEl = $video.find(".badge-shape-wiz__text").first();
-    const $channelEl = $video.find("ytd-channel-name:first #text > a");
-    const $viewsEl = $video.find("#metadata-line > span:nth-child(3)");
-    const $timeEl = $video.find("#metadata-line > span:nth-child(4)");
-    const $thumbnailEl = $video.find("#thumbnail > yt-image > img");
+    const $durationEl = $video.find(".ytBadgeShapeText").first();
+    const $channelEl = $video.find(".long-byline #text > a");
+    const $metaItems = $video.find(".inline-metadata-item");
+    const $viewsEl = $metaItems.eq(0);
+    const $timeEl = $metaItems.eq(1);
+    const $thumbnailEl = $video.find("yt-image img");
     const $descriptionEl = $video.find(".metadata-snippet-text");
 
-    if (
-      $titleEl.length === 0 ||
-      $durationEl.length === 0 ||
-      !$titleEl.attr("href")
-    )
-      return null;
+    if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
 
     const title = $titleEl.text().trim();
     const duration = $durationEl.text().trim();
