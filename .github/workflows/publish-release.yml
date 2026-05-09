@@ -1,0 +1,50 @@
+name: Publish Release
+
+on:
+  push:
+    branches:
+      - publish
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build extension
+        run: bun run build
+
+      - name: Package extension
+        run: zip -r youtube-queue-builder.zip dist
+
+      - name: Create release tag
+        id: tag
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAG_NAME="publish-$(date -u +'%Y.%m.%d')-${SHORT_SHA}"
+          git tag "$TAG_NAME" "$GITHUB_SHA"
+          git push origin "$TAG_NAME"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag_name }}" \
+            youtube-queue-builder.zip \
+            --title "${{ steps.tag.outputs.tag_name }}" \
+            --notes "Automated release for commit ${{ github.sha }}"
