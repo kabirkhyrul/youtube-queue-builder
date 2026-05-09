@@ -9,8 +9,7 @@ export const useVideoStore = defineStore("video", () => {
   const channelFilter = ref<string[]>([]);
   const minViewsFilter = ref<string>("");
   const maxViewsFilter = ref<string>("");
-  const minPublishedDateFilter = ref<string>("");
-  const maxPublishedDateFilter = ref<string>("");
+  const publishedTimeFilter = ref<string>("");
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
   const scanButtonText = ref<string>("Scan Current Page");
@@ -21,56 +20,10 @@ export const useVideoStore = defineStore("video", () => {
     return [...new Set(channels)].sort();
   });
 
-  const getDateStart = (dateValue: string): number => new Date(`${dateValue}T00:00:00`).getTime();
-  const getDateEnd = (dateValue: string): number => new Date(`${dateValue}T23:59:59`).getTime();
-
-  const parsePublishedTime = (publishedTime: string): number | null => {
-    const normalized = publishedTime.toLowerCase().trim();
-    const now = new Date();
-
-    if (normalized.includes("today") || normalized.includes("just now")) {
-      return now.getTime();
-    }
-
-    if (normalized.includes("yesterday")) {
-      now.setDate(now.getDate() - 1);
-      return now.getTime();
-    }
-
-    const match = normalized.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/);
-    if (!match) return null;
-
-    const amount = Number(match[1]);
-    const unit = match[2];
-
-    switch (unit) {
-      case "second":
-        now.setSeconds(now.getSeconds() - amount);
-        break;
-      case "minute":
-        now.setMinutes(now.getMinutes() - amount);
-        break;
-      case "hour":
-        now.setHours(now.getHours() - amount);
-        break;
-      case "day":
-        now.setDate(now.getDate() - amount);
-        break;
-      case "week":
-        now.setDate(now.getDate() - amount * 7);
-        break;
-      case "month":
-        now.setMonth(now.getMonth() - amount);
-        break;
-      case "year":
-        now.setFullYear(now.getFullYear() - amount);
-        break;
-      default:
-        return null;
-    }
-
-    return now.getTime();
-  };
+  const uniquePublishedTimes = computed((): string[] => {
+    const dates = videos.value.map((v: VideoData) => v.publishedTime).filter(Boolean);
+    return [...new Set(dates)];
+  });
 
   const filteredVideos = computed((): VideoData[] => {
     let filtered: VideoData[] = videos.value;
@@ -88,13 +41,8 @@ export const useVideoStore = defineStore("video", () => {
       });
     }
 
-    if (minPublishedDateFilter.value || maxPublishedDateFilter.value) {
-      const minDate = minPublishedDateFilter.value ? getDateStart(minPublishedDateFilter.value) : 0;
-      const maxDate = maxPublishedDateFilter.value ? getDateEnd(maxPublishedDateFilter.value) : Infinity;
-      filtered = filtered.filter((video) => {
-        const publishedAt = parsePublishedTime(video.publishedTime);
-        return publishedAt !== null && publishedAt >= minDate && publishedAt <= maxDate;
-      });
+    if (publishedTimeFilter.value) {
+      filtered = filtered.filter((video) => video.publishedTime === publishedTimeFilter.value);
     }
 
     filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
@@ -196,13 +144,13 @@ export const useVideoStore = defineStore("video", () => {
     channelFilter,
     minViewsFilter,
     maxViewsFilter,
-    minPublishedDateFilter,
-    maxPublishedDateFilter,
+    publishedTimeFilter,
     isLoading,
     canScan,
     scanButtonText,
     // Computed
     uniqueChannels,
+    uniquePublishedTimes,
     filteredVideos,
     // Actions
     loadFromStorage,

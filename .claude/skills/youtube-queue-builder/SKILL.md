@@ -11,7 +11,8 @@ This repo is a Chrome Manifest V3 extension built with Bun, Vite, Vue 3, TypeScr
 
 Key paths:
 
-- `src/App.vue` and `src/components/*.vue`: sidebar UI.
+- `src/stores/videoStore.ts`: Pinia setup store — all video state, filter/sort computed props, and Chrome API actions live here.
+- `src/App.vue` and `src/components/*.vue`: sidebar UI; components read the store directly instead of using prop/emit chains.
 - `src/content.ts`: YouTube search-results DOM scanner.
 - `src/background.ts`: background service worker and queue creation.
 - `src/types.ts`: shared TypeScript data contracts.

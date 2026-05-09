@@ -40,17 +40,18 @@ Communication flow:
 1. User clicks "Scan" in `Controls.vue` → `chrome.tabs.sendMessage` to content script
 2. Content script scans `ytd-video-renderer` nodes → `chrome.runtime.sendMessage({ action: "videosFound", videos })`
 3. Background stores to `chrome.storage.local`
-4. `App.vue` reads storage and passes data down to components
+4. `src/stores/videoStore.ts` (Pinia) calls `loadFromStorage()` → `App.vue` renders updated list
 
-Queue creation: `Controls.vue` sends `{ action: "addCurrentToQueue", videos: filteredVideos }` → background builds YouTube watch queue URL from `videoId` fields.
+Queue creation: `store.addCurrentToQueue()` in `Controls.vue` sends `{ action: "addCurrentToQueue", videos: filteredVideos }` → background builds YouTube watch queue URL from `videoId` fields.
 
 ## Data Flow for Lists/Filters
 
 The shared shape is `VideoData` in `src/types.ts`. The stable key is `videoId` — never assume an `id` field.
 
 - `src/content.ts` → `YouTubeVideoScanner.extractVideoData()` builds each `VideoData` from DOM
-- `src/App.vue` owns `videos`, `sortBy`, `channelFilter`, `filteredVideos` state; loads from storage on mount
-- `src/components/Controls.vue` receives `videos`, computes filtered/sorted list, emits `filtered-videos-updated`
+- `src/stores/videoStore.ts` owns all state (`videos`, `sortBy`, filter fields) and exposes computed `filteredVideos`, `uniqueChannels`
+- `src/App.vue` calls `store.loadFromStorage()` on mount; passes `notificationsRef` to `Controls`
+- `src/components/Controls.vue` reads/writes store directly — no filter props or emits
 - `src/components/VideoList.vue` renders the final `filteredVideos` prop; uses `video.videoId` as `v-for` key
 
 Before adding list, filter, sort, scan, or queue features — consult this flow and `AGENTS.md`.

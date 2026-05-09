@@ -20,10 +20,11 @@ Use this map before adding list, filter, sort, scan, or queue features:
 - `src/content.ts` owns YouTube DOM scanning. `YouTubeVideoScanner.extractVideoData()` builds each `VideoData` object from a `ytd-video-renderer`, including `title`, `duration`, `url`, `videoId`, `channel`, `views`, `publishedTime`, `thumbnail`, `description`, `durationInSeconds`, `viewsCount`, and `isLong`.
 - `src/content.ts` sends scanned results with `chrome.runtime.sendMessage({ action: "videosFound", videos })`.
 - `src/background.ts` listens for `videosFound` and persists the array with `chrome.storage.local.set({ videos: request.videos })`.
-- `src/App.vue` loads initial list data from `chrome.storage.local.get(["videos"])` into `videos`, owns `sortBy`, `channelFilter`, and `filteredVideos`, and passes data/events between `Controls` and `VideoList`.
-- `src/components/Controls.vue` receives `videos`, computes `uniqueChannels`, applies channel filtering, applies sorting, then emits `filtered-videos-updated` so `App.vue` can update `filteredVideos`.
-- `src/components/VideoList.vue` only renders the final `filteredVideos` prop. It should display fields from `VideoData` and use `video.videoId` as the `v-for` key.
-- Queue creation uses the currently filtered list. `Controls.vue` sends `chrome.runtime.sendMessage({ action: "addCurrentToQueue", videos: filteredVideos.value })`, and `src/background.ts` builds the YouTube queue URL from `videoId`.
+- `src/stores/videoStore.ts` (Pinia setup store) owns all state (`videos`, `sortBy`, `channelFilter`, view/date filters, `isLoading`, `canScan`) and exposes computed `filteredVideos`, `uniqueChannels`, and actions `loadFromStorage`, `checkCurrentTab`, `scanCurrentPage`, `addCurrentToQueue`.
+- `src/App.vue` calls `store.loadFromStorage()` on mount; passes `notificationsRef` to `Controls` for toast messages.
+- `src/components/Controls.vue` consumes the store directly — no props for filter state, no emits for filter changes. Only prop: `notificationsRef`.
+- `src/components/VideoList.vue` receives `filteredVideos` as a prop from `App.vue` and uses `video.videoId` as the `v-for` key.
+- Queue creation: `Controls.vue` calls `store.addCurrentToQueue()`, which sends `chrome.runtime.sendMessage({ action: "addCurrentToQueue", videos: filteredVideos.value })`; `src/background.ts` builds the YouTube queue URL from `videoId`.
 
 ## Build, Test, and Development Commands
 

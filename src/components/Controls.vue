@@ -25,9 +25,8 @@
         @update:modelValue="store.channelFilter = $event" />
       <ViewsFilter :min="store.minViewsFilter" :max="store.maxViewsFilter"
         @update:min="store.minViewsFilter = $event" @update:max="store.maxViewsFilter = $event" />
-      <DateFilter :min="store.minPublishedDateFilter" :max="store.maxPublishedDateFilter"
-        @update:min="store.minPublishedDateFilter = $event"
-        @update:max="store.maxPublishedDateFilter = $event" />
+      <DateFilter :modelValue="store.publishedTimeFilter" :dates="store.uniquePublishedTimes"
+        @update:modelValue="store.publishedTimeFilter = $event" />
     </div>
   </div>
 </template>
