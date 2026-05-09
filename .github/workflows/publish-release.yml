@@ -1,4 +1,4 @@
-name: Publish Release
+name: Release
 
 on:
   push:
@@ -28,14 +28,22 @@ jobs:
       - name: Build extension
         run: bun run build
 
+      - name: Read package info
+        id: package
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Package extension
-        run: zip -r youtube-queue-builder.zip dist
+        run: zip -r "${{ steps.package.outputs.name }}-${{ steps.package.outputs.version }}.zip" dist
 
       - name: Create release tag
         id: tag
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          TAG_NAME="publish-$(date -u +'%Y.%m.%d')-${SHORT_SHA}"
+          TAG_NAME="${{ steps.package.outputs.name }}-v${{ steps.package.outputs.version }}-${SHORT_SHA}"
           git tag "$TAG_NAME" "$GITHUB_SHA"
           git push origin "$TAG_NAME"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
@@ -45,6 +53,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.tag.outputs.tag_name }}" \
-            youtube-queue-builder.zip \
-            --title "${{ steps.tag.outputs.tag_name }}" \
+            "${{ steps.package.outputs.name }}-${{ steps.package.outputs.version }}.zip" \
+            --title "${{ steps.package.outputs.name }} v${{ steps.package.outputs.version }}" \
             --notes "Automated release for commit ${{ github.sha }}"
