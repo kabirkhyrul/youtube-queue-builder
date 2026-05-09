@@ -26,7 +26,7 @@
       <ViewsFilter :min="store.minViewsFilter" :max="store.maxViewsFilter"
         @update:min="store.minViewsFilter = $event" @update:max="store.maxViewsFilter = $event" />
       <DateFilter :modelValue="store.publishedTimeFilter" :dates="store.uniquePublishedTimes"
-        @update:modelValue="store.publishedTimeFilter = $event" />
+        @update:modelValue="(v: string[]) => store.publishedTimeFilter = v" />
     </div>
   </div>
 </template>

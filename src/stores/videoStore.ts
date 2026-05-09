@@ -2,6 +2,35 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { VideoData } from "../types";
 
+const publishedTimeUnits = [
+  { keys: ["millisecond", "milliseconds", "ms"], ms: 1 },
+  { keys: ["second", "seconds", "sec", "secs", "s"], ms: 1000 },
+  { keys: ["month", "months", "mo"], ms: 1000 * 60 * 60 * 24 * 30 },
+  { keys: ["minute", "minutes", "min", "mins", "m"], ms: 1000 * 60 },
+  { keys: ["hour", "hours", "hr", "hrs", "h"], ms: 1000 * 60 * 60 },
+  { keys: ["day", "days", "d"], ms: 1000 * 60 * 60 * 24 },
+  { keys: ["week", "weeks", "wk", "wks", "w"], ms: 1000 * 60 * 60 * 24 * 7 },
+  { keys: ["year", "years", "yr", "yrs", "y"], ms: 1000 * 60 * 60 * 24 * 365 },
+];
+
+const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): number => {
+  const normalized = publishedTime.trim().toLowerCase();
+  const match = normalized.match(/^(\d+)\s*([a-z]+)/);
+
+  if (!match) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const value = Number(match[1]);
+  const unit = publishedTimeUnits.find((item) => item.keys.some((key) => match[2].startsWith(key)));
+
+  if (!unit) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  return now - value * unit.ms;
+};
+
 export const useVideoStore = defineStore("video", () => {
   // State
   const videos = ref<VideoData[]>([]);
@@ -9,7 +38,7 @@ export const useVideoStore = defineStore("video", () => {
   const channelFilter = ref<string[]>([]);
   const minViewsFilter = ref<string>("");
   const maxViewsFilter = ref<string>("");
-  const publishedTimeFilter = ref<string>("");
+  const publishedTimeFilter = ref<string[]>([]);
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
   const scanButtonText = ref<string>("Scan Current Page");
@@ -22,7 +51,11 @@ export const useVideoStore = defineStore("video", () => {
 
   const uniquePublishedTimes = computed((): string[] => {
     const dates = videos.value.map((v: VideoData) => v.publishedTime).filter(Boolean);
-    return [...new Set(dates)];
+    const now = Date.now();
+    return [...new Set(dates)].sort((a, b) => {
+      const timestampDiff = getPublishedTimeTimestamp(b, now) - getPublishedTimeTimestamp(a, now);
+      return timestampDiff || a.localeCompare(b);
+    });
   });
 
   const filteredVideos = computed((): VideoData[] => {
@@ -41,8 +74,8 @@ export const useVideoStore = defineStore("video", () => {
       });
     }
 
-    if (publishedTimeFilter.value) {
-      filtered = filtered.filter((video) => video.publishedTime === publishedTimeFilter.value);
+    if (publishedTimeFilter.value.length > 0) {
+      filtered = filtered.filter((video) => publishedTimeFilter.value.includes(video.publishedTime));
     }
 
     filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
@@ -55,6 +88,8 @@ export const useVideoStore = defineStore("video", () => {
           return a.channel.localeCompare(b.channel);
         case "views":
           return (b.viewsCount || 0) - (a.viewsCount || 0);
+        case "publishedTime":
+          return getPublishedTimeTimestamp(b.publishedTime) - getPublishedTimeTimestamp(a.publishedTime);
         default:
           return 0;
       }

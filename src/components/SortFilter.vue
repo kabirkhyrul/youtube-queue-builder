@@ -1,16 +1,15 @@
 <template>
     <div>
         <label class="block text-xs font-medium text-gray-700 mb-1">Sort by:</label>
-        <select
-            :value="modelValue"
-            @input="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
-            class="w-full text-sm border border-gray-300 rounded px-3 py-2"
-        >
-            <option value="duration">Duration</option>
-            <option value="title">Title</option>
-            <option value="channel">Channel</option>
-            <option value="views">Views</option>
-        </select>
+        <div class="flex flex-wrap gap-2">
+            <label v-for="(label, value) in labels" :key="value"
+                class="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" :value="value" :checked="modelValue === value"
+                    @change="$emit('update:modelValue', value)"
+                    class="h-3.5 w-3.5 border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm text-gray-700">{{ label }}</span>
+            </label>
+        </div>
     </div>
 </template>
 
@@ -22,4 +21,11 @@ defineProps<{
 defineEmits<{
     "update:modelValue": [value: string];
 }>();
+
+const labels: Record<string, string> = {
+    duration: "Duration",
+    title: "Title",
+    channel: "Channel",
+    views: "Views",
+};
 </script>
