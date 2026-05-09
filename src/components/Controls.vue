@@ -84,30 +84,131 @@
                     </button>
                 </div>
             </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1"
+                    >Filter by views:</label
+                >
+                <div class="grid grid-cols-2 gap-2">
+                    <input
+                        type="number"
+                        min="0"
+                        :value="props.minViewsFilter"
+                        @input="$emit('update:minViewsFilter', ($event.target as HTMLInputElement).value)"
+                        placeholder="Min"
+                        class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        :value="props.maxViewsFilter"
+                        @input="$emit('update:maxViewsFilter', ($event.target as HTMLInputElement).value)"
+                        placeholder="Max"
+                        class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+                    />
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1"
+                    >Filter by published time:</label
+                >
+                <div class="grid grid-cols-2 gap-2">
+                    <input
+                        type="date"
+                        :value="props.minPublishedDateFilter"
+                        @input="$emit('update:minPublishedDateFilter', ($event.target as HTMLInputElement).value)"
+                        class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+                    />
+                    <input
+                        type="date"
+                        :value="props.maxPublishedDateFilter"
+                        @input="$emit('update:maxPublishedDateFilter', ($event.target as HTMLInputElement).value)"
+                        class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+                    />
+                </div>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch, Ref } from 'vue';
-import type { VideoData } from '../types';
+import { computed, ref, onMounted, watch, Ref } from "vue";
+import type { VideoData } from "../types";
 
 interface Props {
   videos: VideoData[];
   sortBy: string;
   channelFilter: string[];
+  minViewsFilter: string;
+  maxViewsFilter: string;
+  minPublishedDateFilter: string;
+  maxPublishedDateFilter: string;
 }
 
 const props = defineProps<Props>();
 
 const isLoading: Ref<boolean> = ref(false);
 const canScan: Ref<boolean> = ref(false);
-const scanButtonText: Ref<string> = ref('Scan Current Page');
+const scanButtonText: Ref<string> = ref("Scan Current Page");
 
 const uniqueChannels = computed((): string[] => {
   const channels = props.videos.map((video: VideoData) => video.channel).filter(Boolean);
   return [...new Set(channels)].sort();
 });
+
+const getDateStart = (dateValue: string): number => new Date(`${dateValue}T00:00:00`).getTime();
+
+const getDateEnd = (dateValue: string): number => new Date(`${dateValue}T23:59:59`).getTime();
+
+const parsePublishedTime = (publishedTime: string): number | null => {
+  const normalized = publishedTime.toLowerCase().trim();
+  const now = new Date();
+
+  if (normalized.includes("today") || normalized.includes("just now")) {
+    return now.getTime();
+  }
+
+  if (normalized.includes("yesterday")) {
+    now.setDate(now.getDate() - 1);
+    return now.getTime();
+  }
+
+  const match = normalized.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/);
+
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2];
+
+  switch (unit) {
+    case "second":
+      now.setSeconds(now.getSeconds() - amount);
+      break;
+    case "minute":
+      now.setMinutes(now.getMinutes() - amount);
+      break;
+    case "hour":
+      now.setHours(now.getHours() - amount);
+      break;
+    case "day":
+      now.setDate(now.getDate() - amount);
+      break;
+    case "week":
+      now.setDate(now.getDate() - amount * 7);
+      break;
+    case "month":
+      now.setMonth(now.getMonth() - amount);
+      break;
+    case "year":
+      now.setFullYear(now.getFullYear() - amount);
+      break;
+    default:
+      return null;
+  }
+
+  return now.getTime();
+};
 
 const filteredVideos = computed((): VideoData[] => {
   let filtered: VideoData[] = props.videos;
@@ -119,16 +220,38 @@ const filteredVideos = computed((): VideoData[] => {
     );
   }
 
+  if (props.minViewsFilter || props.maxViewsFilter) {
+    const minViews = props.minViewsFilter ? Number(props.minViewsFilter) : 0;
+    const maxViews = props.maxViewsFilter ? Number(props.maxViewsFilter) : Infinity;
+
+    filtered = filtered.filter((video) => {
+      const viewsCount = video.viewsCount || 0;
+
+      return viewsCount >= minViews && viewsCount <= maxViews;
+    });
+  }
+
+  if (props.minPublishedDateFilter || props.maxPublishedDateFilter) {
+    const minPublishedDate = props.minPublishedDateFilter ? getDateStart(props.minPublishedDateFilter) : 0;
+    const maxPublishedDate = props.maxPublishedDateFilter ? getDateEnd(props.maxPublishedDateFilter) : Infinity;
+
+    filtered = filtered.filter((video) => {
+      const publishedAt = parsePublishedTime(video.publishedTime);
+
+      return publishedAt !== null && publishedAt >= minPublishedDate && publishedAt <= maxPublishedDate;
+    });
+  }
+
   // Apply sorting
   filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
     switch (props.sortBy) {
-      case 'duration':
+      case "duration":
         return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
-      case 'title':
+      case "title":
         return a.title.localeCompare(b.title);
-      case 'channel':
+      case "channel":
         return a.channel.localeCompare(b.channel);
-      case 'views':
+      case "views":
         return (b.viewsCount || 0) - (a.viewsCount || 0);
       default:
         return 0;
@@ -139,11 +262,15 @@ const filteredVideos = computed((): VideoData[] => {
 });
 
 const emit = defineEmits<{
-  'update:sortBy': [value: string];
-  'update:channelFilter': [value: string[]];
-  'videos-updated': [videos: VideoData[]];
-  'filtered-videos-updated': [videos: VideoData[]];
-  'show-message': [message: string, type?: string];
+  "update:sortBy": [value: string];
+  "update:channelFilter": [value: string[]];
+  "update:minViewsFilter": [value: string];
+  "update:maxViewsFilter": [value: string];
+  "update:minPublishedDateFilter": [value: string];
+  "update:maxPublishedDateFilter": [value: string];
+  "videos-updated": [videos: VideoData[]];
+  "filtered-videos-updated": [videos: VideoData[]];
+  "show-message": [message: string, type?: string];
 }>();
 
 const checkCurrentTab = async (): Promise<void> => {
@@ -153,15 +280,15 @@ const checkCurrentTab = async (): Promise<void> => {
       currentWindow: true,
     });
 
-    if (tab.url && tab.url.includes('youtube.com/results')) {
-      scanButtonText.value = 'Scan Current Page';
+    if (tab.url && tab.url.includes("youtube.com/results")) {
+      scanButtonText.value = "Scan Current Page";
       canScan.value = true;
     } else {
-      scanButtonText.value = 'Navigate to YouTube Search';
+      scanButtonText.value = "Navigate to YouTube Search";
       canScan.value = false;
     }
   } catch (error) {
-    console.error('Error checking current tab:', error);
+    console.error("Error checking current tab:", error);
   }
 };
 
@@ -174,24 +301,24 @@ const scanCurrentPage = async (): Promise<void> => {
       currentWindow: true,
     });
 
-    if (!tab.url || !tab.url.includes('youtube.com/results')) {
-      emit('show-message', 'Please navigate to YouTube search results first', 'error');
+    if (!tab.url || !tab.url.includes("youtube.com/results")) {
+      emit("show-message", "Please navigate to YouTube search results first", "error");
       return;
     }
 
     const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'scanPage',
+      action: "scanPage",
     });
 
     if (response.success) {
-      emit('show-message', 'Page scanned successfully!');
+      emit("show-message", "Page scanned successfully!");
       setTimeout(async () => {
-        const data = await chrome.storage.local.get(['videos']);
-        emit('videos-updated', data.videos || []);
+        const data = await chrome.storage.local.get(["videos"]);
+        emit("videos-updated", data.videos || []);
       }, 1000);
     }
   } catch (error) {
-    emit('show-message', 'Error scanning page: ' + (error as Error).message, 'error');
+    emit("show-message", "Error scanning page: " + (error as Error).message, "error");
   } finally {
     isLoading.value = false;
   }
@@ -199,7 +326,7 @@ const scanCurrentPage = async (): Promise<void> => {
 
 const addCurrentToQueue = async (): Promise<void> => {
   if (filteredVideos.value.length === 0) {
-    emit('show-message', 'No videos found', 'error');
+    emit("show-message", "No videos found", "error");
     return;
   }
 
@@ -208,12 +335,12 @@ const addCurrentToQueue = async (): Promise<void> => {
   try {
     const response = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('Request timeout'));
+        reject(new Error("Request timeout"));
       }, 10000);
 
       chrome.runtime.sendMessage(
         {
-          action: 'addCurrentToQueue',
+          action: "addCurrentToQueue",
           videos: filteredVideos.value,
         },
         (response) => {
@@ -228,13 +355,13 @@ const addCurrentToQueue = async (): Promise<void> => {
     });
 
     if (response && (response as any).success) {
-      emit('show-message', `Added ${(response as any).count} videos to YouTube queue!`);
+      emit("show-message", `Added ${(response as any).count} videos to YouTube queue!`);
     } else {
-      const errorMsg = (response as any) ? (response as any).error : 'No response received';
-      emit('show-message', 'Queue failed: ' + errorMsg, 'error');
+      const errorMsg = (response as any) ? (response as any).error : "No response received";
+      emit("show-message", "Queue failed: " + errorMsg, "error");
     }
   } catch (error) {
-    emit('show-message', 'Queue error: ' + (error as Error).message, 'error');
+    emit("show-message", "Queue error: " + (error as Error).message, "error");
   } finally {
     isLoading.value = false;
   }

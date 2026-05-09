@@ -12,6 +12,19 @@ This is a Vite + Vue 3 + TypeScript Chrome extension for scanning YouTube search
 - `public/manifest.json` is the source Chrome extension manifest.
 - `dist/` is generated build output used for unpacked extension loading.
 
+## List Render & Filter Data Flow
+
+Use this map before adding list, filter, sort, scan, or queue features:
+
+- The shared video JSON shape is `VideoData` in `src/types.ts`. The stable video key is `videoId`; do not assume an `id` field exists.
+- `src/content.ts` owns YouTube DOM scanning. `YouTubeVideoScanner.extractVideoData()` builds each `VideoData` object from a `ytd-video-renderer`, including `title`, `duration`, `url`, `videoId`, `channel`, `views`, `publishedTime`, `thumbnail`, `description`, `durationInSeconds`, `viewsCount`, and `isLong`.
+- `src/content.ts` sends scanned results with `chrome.runtime.sendMessage({ action: "videosFound", videos })`.
+- `src/background.ts` listens for `videosFound` and persists the array with `chrome.storage.local.set({ videos: request.videos })`.
+- `src/App.vue` loads initial list data from `chrome.storage.local.get(["videos"])` into `videos`, owns `sortBy`, `channelFilter`, and `filteredVideos`, and passes data/events between `Controls` and `VideoList`.
+- `src/components/Controls.vue` receives `videos`, computes `uniqueChannels`, applies channel filtering, applies sorting, then emits `filtered-videos-updated` so `App.vue` can update `filteredVideos`.
+- `src/components/VideoList.vue` only renders the final `filteredVideos` prop. It should display fields from `VideoData` and use `video.videoId` as the `v-for` key.
+- Queue creation uses the currently filtered list. `Controls.vue` sends `chrome.runtime.sendMessage({ action: "addCurrentToQueue", videos: filteredVideos.value })`, and `src/background.ts` builds the YouTube queue URL from `videoId`.
+
 ## Build, Test, and Development Commands
 
 Use Bun, since this repo includes `bun.lock`.

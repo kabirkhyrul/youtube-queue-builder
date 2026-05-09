@@ -10,6 +10,10 @@ const videos: Ref<VideoData[]> = ref([]);
 const filteredVideos: Ref<VideoData[]> = ref([]);
 const sortBy: Ref<string> = ref("duration");
 const channelFilter: Ref<string[]> = ref([]);
+const minViewsFilter: Ref<string> = ref("");
+const maxViewsFilter: Ref<string> = ref("");
+const minPublishedDateFilter: Ref<string> = ref("");
+const maxPublishedDateFilter: Ref<string> = ref("");
 const notificationsRef = ref();
 
 const loadInitialData = async (): Promise<void> => {
@@ -45,8 +49,16 @@ onMounted(() => {
         :videos="videos"
         :sort-by="sortBy"
         :channel-filter="channelFilter"
+        :min-views-filter="minViewsFilter"
+        :max-views-filter="maxViewsFilter"
+        :min-published-date-filter="minPublishedDateFilter"
+        :max-published-date-filter="maxPublishedDateFilter"
         @update:sort-by="sortBy = $event"
         @update:channel-filter="channelFilter = $event"
+        @update:min-views-filter="minViewsFilter = $event"
+        @update:max-views-filter="maxViewsFilter = $event"
+        @update:min-published-date-filter="minPublishedDateFilter = $event"
+        @update:max-published-date-filter="maxPublishedDateFilter = $event"
         @videos-updated="handleVideosUpdated"
         @filtered-videos-updated="handleFilteredVideosUpdated"
         @show-message="handleShowMessage"
