@@ -12,4 +12,7 @@ export interface VideoData {
   durationInSeconds: number;
   viewsCount: number;
   isLong: boolean;
+  is4K: boolean;
+  isOfficialChannel: boolean;
+  viewsPerDay: number;
 }

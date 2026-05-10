@@ -27,5 +27,7 @@ const labels: Record<string, string> = {
     title: "Title",
     channel: "Channel",
     views: "Views",
+    viewsPerDay: "Views/Day",
+    publishedTime: "Newest",
 };
 </script>

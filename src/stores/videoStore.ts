@@ -2,6 +2,8 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { VideoData } from "../types";
 
+type SortOption = "duration" | "title" | "channel" | "views" | "viewsPerDay" | "publishedTime";
+
 const publishedTimeUnits = [
   { keys: ["millisecond", "milliseconds", "ms"], ms: 1 },
   { keys: ["second", "seconds", "sec", "secs", "s"], ms: 1000 },
@@ -12,6 +14,8 @@ const publishedTimeUnits = [
   { keys: ["week", "weeks", "wk", "wks", "w"], ms: 1000 * 60 * 60 * 24 * 7 },
   { keys: ["year", "years", "yr", "yrs", "y"], ms: 1000 * 60 * 60 * 24 * 365 },
 ];
+
+const textCollator = new Intl.Collator(undefined, { sensitivity: "base" });
 
 const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): number => {
   const normalized = publishedTime.trim().toLowerCase();
@@ -31,71 +35,123 @@ const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): num
   return now - value * unit.ms;
 };
 
+const createPublishedTimeTimestampMap = (items: VideoData[]): Map<string, number> => {
+  const now = Date.now();
+  const timestamps = new Map<string, number>();
+
+  for (const video of items) {
+    if (video.publishedTime && !timestamps.has(video.publishedTime)) {
+      timestamps.set(video.publishedTime, getPublishedTimeTimestamp(video.publishedTime, now));
+    }
+  }
+
+  return timestamps;
+};
+
+const comparePublishedTimeLabels = (a: string, b: string, timestamps: Map<string, number>): number => {
+  const timestampA = timestamps.get(a) ?? Number.NEGATIVE_INFINITY;
+  const timestampB = timestamps.get(b) ?? Number.NEGATIVE_INFINITY;
+
+  if (timestampA === timestampB) {
+    return textCollator.compare(a, b);
+  }
+
+  return timestampB - timestampA;
+};
+
 export const useVideoStore = defineStore("video", () => {
   // State
   const videos = ref<VideoData[]>([]);
-  const sortBy = ref<string>("duration");
+  const sortBy = ref<SortOption>("duration");
   const channelFilter = ref<string[]>([]);
   const minViewsFilter = ref<string>("");
   const maxViewsFilter = ref<string>("");
   const publishedTimeFilter = ref<string[]>([]);
+  const only4KFilter = ref<boolean>(false);
+  const onlyOfficialFilter = ref<boolean>(false);
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
-  const scanButtonText = ref<string>("Scan Current Page");
+  const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search"));
 
   // Derived
+  const channelFilterSet = computed(() => new Set(channelFilter.value));
+  const publishedTimeFilterSet = computed(() => new Set(publishedTimeFilter.value));
+  const publishedTimeTimestamps = computed(() => createPublishedTimeTimestampMap(videos.value));
+  const viewFilterBounds = computed(() => ({
+    min: minViewsFilter.value ? Number(minViewsFilter.value) : 0,
+    max: maxViewsFilter.value ? Number(maxViewsFilter.value) : Infinity,
+  }));
+
   const uniqueChannels = computed((): string[] => {
-    const channels = videos.value.map((v: VideoData) => v.channel).filter(Boolean);
-    return [...new Set(channels)].sort();
+    const channels = new Set<string>();
+
+    for (const video of videos.value) {
+      if (video.channel) {
+        channels.add(video.channel);
+      }
+    }
+
+    return [...channels].sort((a, b) => textCollator.compare(a, b));
   });
 
   const uniquePublishedTimes = computed((): string[] => {
-    const dates = videos.value.map((v: VideoData) => v.publishedTime).filter(Boolean);
-    const now = Date.now();
-    return [...new Set(dates)].sort((a, b) => {
-      const timestampDiff = getPublishedTimeTimestamp(b, now) - getPublishedTimeTimestamp(a, now);
-      return timestampDiff || a.localeCompare(b);
-    });
+    const timestamps = publishedTimeTimestamps.value;
+
+    return [...timestamps.keys()].sort((a, b) => comparePublishedTimeLabels(a, b, timestamps));
   });
 
   const filteredVideos = computed((): VideoData[] => {
-    let filtered: VideoData[] = videos.value;
+    const channels = channelFilterSet.value;
+    const publishedTimes = publishedTimeFilterSet.value;
+    const timestamps = publishedTimeTimestamps.value;
+    const { min, max } = viewFilterBounds.value;
+    const shouldFilterViews = Boolean(minViewsFilter.value || maxViewsFilter.value);
 
-    if (channelFilter.value.length > 0) {
-      filtered = filtered.filter((video) => channelFilter.value.includes(video.channel));
-    }
+    const filtered = videos.value.filter((video) => {
+      if (channels.size > 0 && !channels.has(video.channel)) {
+        return false;
+      }
 
-    if (minViewsFilter.value || maxViewsFilter.value) {
-      const minViews = minViewsFilter.value ? Number(minViewsFilter.value) : 0;
-      const maxViews = maxViewsFilter.value ? Number(maxViewsFilter.value) : Infinity;
-      filtered = filtered.filter((video) => {
+      if (shouldFilterViews) {
         const viewsCount = video.viewsCount || 0;
-        return viewsCount >= minViews && viewsCount <= maxViews;
-      });
-    }
+        if (viewsCount < min || viewsCount > max) {
+          return false;
+        }
+      }
 
-    if (publishedTimeFilter.value.length > 0) {
-      filtered = filtered.filter((video) => publishedTimeFilter.value.includes(video.publishedTime));
-    }
+      if (publishedTimes.size > 0 && !publishedTimes.has(video.publishedTime)) {
+        return false;
+      }
 
-    filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
+      if (only4KFilter.value && !video.is4K) {
+        return false;
+      }
+
+      if (onlyOfficialFilter.value && !video.isOfficialChannel) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return filtered.sort((a: VideoData, b: VideoData) => {
       switch (sortBy.value) {
         case "duration":
           return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
         case "title":
-          return a.title.localeCompare(b.title);
+          return textCollator.compare(a.title, b.title);
         case "channel":
-          return a.channel.localeCompare(b.channel);
+          return textCollator.compare(a.channel, b.channel);
         case "views":
           return (b.viewsCount || 0) - (a.viewsCount || 0);
+        case "viewsPerDay":
+          return (b.viewsPerDay || 0) - (a.viewsPerDay || 0);
         case "publishedTime":
-          return getPublishedTimeTimestamp(b.publishedTime) - getPublishedTimeTimestamp(a.publishedTime);
+          return comparePublishedTimeLabels(a.publishedTime, b.publishedTime, timestamps);
         default:
           return 0;
       }
     });
-
-    return filtered;
   });
 
   // Actions
@@ -107,13 +163,7 @@ export const useVideoStore = defineStore("video", () => {
   async function checkCurrentTab(): Promise<void> {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab.url && tab.url.includes("youtube.com/results")) {
-        scanButtonText.value = "Scan Current Page";
-        canScan.value = true;
-      } else {
-        scanButtonText.value = "Navigate to YouTube Search";
-        canScan.value = false;
-      }
+      canScan.value = !!(tab.url && tab.url.includes("youtube.com/results"));
     } catch (error) {
       console.error("Error checking current tab:", error);
     }
@@ -128,9 +178,9 @@ export const useVideoStore = defineStore("video", () => {
       }
       const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanPage" });
       if (response.success) {
-        setTimeout(async () => {
-          await loadFromStorage();
-        }, 1000);
+        const scanned = await chrome.tabs.sendMessage(tab.id!, { action: "getVideos" });
+        videos.value = Array.isArray(scanned?.videos) ? scanned.videos : [];
+        await chrome.storage.local.set({ videos: videos.value });
         return null;
       }
       return "Scan failed";
@@ -142,7 +192,9 @@ export const useVideoStore = defineStore("video", () => {
   }
 
   async function addCurrentToQueue(): Promise<{ success: boolean; count?: number; error?: string }> {
-    if (filteredVideos.value.length === 0) {
+    const videosToQueue = filteredVideos.value;
+
+    if (videosToQueue.length === 0) {
       return { success: false, error: "No videos found" };
     }
     isLoading.value = true;
@@ -150,7 +202,7 @@ export const useVideoStore = defineStore("video", () => {
       const response = await new Promise<any>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("Request timeout")), 10000);
         chrome.runtime.sendMessage(
-          { action: "addCurrentToQueue", videos: filteredVideos.value },
+          { action: "addCurrentToQueue", videos: videosToQueue },
           (res) => {
             clearTimeout(timeout);
             if (chrome.runtime.lastError) {
@@ -180,10 +232,12 @@ export const useVideoStore = defineStore("video", () => {
     minViewsFilter,
     maxViewsFilter,
     publishedTimeFilter,
+    only4KFilter,
+    onlyOfficialFilter,
     isLoading,
     canScan,
-    scanButtonText,
     // Computed
+    scanButtonText,
     uniqueChannels,
     uniquePublishedTimes,
     filteredVideos,

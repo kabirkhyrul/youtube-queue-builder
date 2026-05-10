@@ -27,6 +27,18 @@
         @update:min="store.minViewsFilter = $event" @update:max="store.maxViewsFilter = $event" />
       <DateFilter :modelValue="store.publishedTimeFilter" :dates="store.uniquePublishedTimes"
         @update:modelValue="(v: string[]) => store.publishedTimeFilter = v" />
+      <div class="flex gap-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" v-model="store.only4KFilter"
+            class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span class="text-sm text-gray-700">4K only</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" v-model="store.onlyOfficialFilter"
+            class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span class="text-sm text-gray-700">Official channels only</span>
+        </label>
+      </div>
     </div>
   </div>
 </template>

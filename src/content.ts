@@ -14,7 +14,11 @@ interface VideoData {
   durationInSeconds: number;
   viewsCount: number;
   isLong: boolean;
+  is4K: boolean;
+  isOfficialChannel: boolean;
+  viewsPerDay: number;
 }
+
 
 declare global {
   interface Window {
@@ -27,6 +31,20 @@ class YouTubeVideoScanner {
 
   constructor() {
     this.videos = [];
+  }
+
+  publishedTimeToDays(publishedTime: string): number {
+    const normalized = publishedTime.trim().toLowerCase();
+    const match = normalized.match(/^(\d+)\s*([a-z]+)/);
+    if (!match) return 0;
+    const value = Number(match[1]);
+    const unit = match[2];
+    if (unit.startsWith("d")) return value;
+    if (unit.startsWith("w")) return value * 7;
+    if (unit.startsWith("mo")) return value * 30;
+    if (unit.startsWith("y")) return value * 365;
+    if (unit.startsWith("h")) return value / 24;
+    return 0;
   }
 
   parseDuration(durationText: string | undefined): number {
@@ -78,6 +96,7 @@ class YouTubeVideoScanner {
     const $timeEl = $metaItems.eq(1);
     const $thumbnailEl = $video.find("yt-image img");
     const $descriptionEl = $video.find(".metadata-snippet-text");
+    const $badges = $video.find(".ytBadgeShapeText");
 
     if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
 
@@ -100,6 +119,12 @@ class YouTubeVideoScanner {
 
     if (!videoId) return null;
 
+    const is4K = $badges.toArray().some((el) => $(el).text().trim().toLowerCase() === "4k");
+    const isOfficialChannel = $video.find("badge-shape[aria-label='Official Artist Channel']").length > 0;
+    const viewsCount = this.parseViews(views);
+    const ageDays = this.publishedTimeToDays(publishedTime);
+    const viewsPerDay = ageDays > 0 ? Math.round(viewsCount / ageDays) : viewsCount;
+
     return {
       title,
       duration,
@@ -112,8 +137,11 @@ class YouTubeVideoScanner {
       thumbnail,
       description,
       durationInSeconds: this.parseDuration(duration),
-      viewsCount: this.parseViews(views),
+      viewsCount,
       isLong: this.isLongVideo(duration),
+      is4K,
+      isOfficialChannel,
+      viewsPerDay,
     };
   }
 
