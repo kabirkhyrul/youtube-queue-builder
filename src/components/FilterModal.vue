@@ -1,18 +1,19 @@
 <template>
     <div>
         <button @click="open = true"
-            class="w-full text-sm text-left border border-gray-300 rounded px-3 py-2 bg-white hover:bg-gray-50 flex items-center justify-between">
-            <span class="text-gray-700">
-                {{ modelValue.length > 0 ? `${modelValue.length} ${itemLabel}${modelValue.length > 1 ? "s" : ""} selected` : placeholder }}
+            class="flex w-full items-center justify-between rounded border border-gray-300 bg-white px-2 py-1 text-left hover:bg-gray-50">
+            <span class="truncate text-sm leading-none text-gray-700">
+                {{ modelValue.length > 0 ? `${modelValue.length} ${itemLabel}${modelValue.length > 1 ? "s" : ""}
+                selected` : placeholder }}
             </span>
         </button>
 
         <Teleport to="body">
             <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
                 @click.self="open = false">
-                <div class="bg-white rounded-lg shadow-xl w-80 max-h-[70vh] flex flex-col">
+                <div class="flex max-h-[70vh] w-80 flex-col rounded-lg bg-white shadow-xl">
                     <!-- Header -->
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+                    <div class="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                         <span class="text-sm font-medium text-gray-800">{{ placeholder }}</span>
                         <button @click="open = false" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,27 +24,28 @@
                     </div>
 
                     <!-- Scrollable item list -->
-                    <div class="overflow-y-auto flex-1 px-4 py-2 flex flex-wrap">
+                    <div class="flex flex-1 flex-wrap overflow-y-auto px-3 py-1.5">
                         <label v-for="item in items" :key="item"
-                            class="flex items-center gap-3 py-2 cursor-pointer hover:bg-gray-50 rounded px-1">
+                            class="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-gray-50">
                             <input type="checkbox" :value="item" :checked="modelValue.includes(item)"
                                 @change="toggle(item)"
-                                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                            <span class="text-sm text-gray-700 truncate">{{ item }}</span>
+                                class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span class="truncate text-sm text-gray-700">{{ item }}</span>
                         </label>
-                        <p v-if="items.length === 0" class="text-sm text-gray-400 py-4 text-center">No {{ itemLabel }}s available</p>
+                        <p v-if="items.length === 0" class="py-4 text-center text-sm text-gray-400">No {{ itemLabel }}s
+                            available</p>
                     </div>
 
                     <!-- Footer -->
-                    <div class="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-                        <span class="text-xs text-gray-500">{{ modelValue.length }} selected</span>
+                    <div class="flex items-center justify-between border-t border-gray-200 px-3 py-2">
+                        <span class="text-sm text-gray-500">{{ modelValue.length }} selected</span>
                         <div class="flex gap-2">
                             <button v-if="modelValue.length > 0" @click="$emit('update:modelValue', [])"
-                                class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">
+                                class="text-sm text-gray-500 hover:text-gray-700 px-2 py-1">
                                 Clear all
                             </button>
                             <button @click="open = false"
-                                class="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded">
+                                class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700">
                                 Done
                             </button>
                         </div>
@@ -55,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { shallowRef } from "vue";
 
 const props = defineProps<{
     modelValue: string[];
@@ -68,7 +70,7 @@ const emit = defineEmits<{
     "update:modelValue": [value: string[]];
 }>();
 
-const open = ref(false);
+const open = shallowRef(false);
 
 const toggle = (item: string): void => {
     const current = props.modelValue;

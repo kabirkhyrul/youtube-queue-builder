@@ -1,24 +1,20 @@
 <template>
-    <div
-        v-if="successMessage"
-        class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded"
-    >
-        {{ successMessage }}
-    </div>
+  <div v-if="successMessage"
+    class="mb-1.5 rounded border border-green-300 bg-green-50 px-2 py-1.5 text-sm leading-snug text-green-700">
+    {{ successMessage }}
+  </div>
 
-    <div
-        v-if="errorMessage"
-        class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded"
-    >
-        {{ errorMessage }}
-    </div>
+  <div v-if="errorMessage"
+    class="mb-1.5 rounded border border-red-300 bg-red-50 px-2 py-1.5 text-sm leading-snug text-red-700">
+    {{ errorMessage }}
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, Ref } from 'vue';
+import { shallowRef } from 'vue';
 
-const successMessage: Ref<string> = ref('');
-const errorMessage: Ref<string> = ref('');
+const successMessage = shallowRef('');
+const errorMessage = shallowRef('');
 
 const showMessage = (message: string, type: string = 'success'): void => {
   if (type === 'success') {

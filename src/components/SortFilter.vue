@@ -1,13 +1,12 @@
 <template>
     <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Sort by:</label>
-        <div class="flex flex-wrap gap-2">
-            <label v-for="(label, value) in labels" :key="value"
-                class="flex items-center gap-1.5 cursor-pointer">
+        <label class="sr-only">Sort by</label>
+        <div class="flex flex-wrap gap-x-2 gap-y-1">
+            <label v-for="(label, value) in labels" :key="value" class="flex cursor-pointer items-center gap-1">
                 <input type="radio" :value="value" :checked="modelValue === value"
                     @change="$emit('update:modelValue', value)"
-                    class="h-3.5 w-3.5 border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm text-gray-700">{{ label }}</span>
+                    class="h-3 w-3 border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm leading-none text-gray-700">{{ label }}</span>
             </label>
         </div>
     </div>
@@ -27,7 +26,7 @@ const labels: Record<string, string> = {
     title: "Title",
     channel: "Channel",
     views: "Views",
-    viewsPerDay: "Views/Day",
+    viewsPerDay: "V/Day",
     publishedTime: "Newest",
 };
 </script>
