@@ -61,8 +61,13 @@ onMounted(() => {
         <DateFilter :modelValue="store.publishedTimeFilter" :dates="store.uniquePublishedTimes"
           @update:modelValue="(v: string[]) => store.publishedTimeFilter = v" />
       </div>
-      <ViewsFilter :min="store.minViewsFilter" :max="store.maxViewsFilter" @update:min="store.minViewsFilter = $event"
-        @update:max="store.maxViewsFilter = $event" />
+      <div class="grid grid-cols-2 gap-1.5">
+        <ViewsFilter :min="store.minViewsFilter" :max="store.maxViewsFilter"
+          @update:min="store.minViewsFilter = $event" @update:max="store.maxViewsFilter = $event" />
+        <ViewsFilter :min="store.minDurationFilter" :max="store.maxDurationFilter" label="Filter by duration"
+          minPlaceholder="Min sec" maxPlaceholder="Max sec" @update:min="store.minDurationFilter = $event"
+          @update:max="store.maxDurationFilter = $event" />
+      </div>
       <div class="flex flex-wrap gap-x-2.5 gap-y-1">
         <label class="flex cursor-pointer items-center gap-1">
           <input type="checkbox" v-model="store.only4KFilter"

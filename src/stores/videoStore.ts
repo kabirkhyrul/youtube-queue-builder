@@ -66,6 +66,8 @@ export const useVideoStore = defineStore("video", () => {
   const channelFilter = ref<string[]>([]);
   const minViewsFilter = ref<string>("");
   const maxViewsFilter = ref<string>("");
+  const minDurationFilter = ref<string>("");
+  const maxDurationFilter = ref<string>("");
   const publishedTimeFilter = ref<string[]>([]);
   const only4KFilter = ref<boolean>(false);
   const onlyOfficialFilter = ref<boolean>(false);
@@ -80,6 +82,10 @@ export const useVideoStore = defineStore("video", () => {
   const viewFilterBounds = computed(() => ({
     min: minViewsFilter.value ? Number(minViewsFilter.value) : 0,
     max: maxViewsFilter.value ? Number(maxViewsFilter.value) : Infinity,
+  }));
+  const durationFilterBounds = computed(() => ({
+    min: minDurationFilter.value ? Number(minDurationFilter.value) : 0,
+    max: maxDurationFilter.value ? Number(maxDurationFilter.value) : Infinity,
   }));
 
   const uniqueChannels = computed((): string[] => {
@@ -104,8 +110,10 @@ export const useVideoStore = defineStore("video", () => {
     const channels = channelFilterSet.value;
     const publishedTimes = publishedTimeFilterSet.value;
     const timestamps = publishedTimeTimestamps.value;
-    const { min, max } = viewFilterBounds.value;
+    const { min: minViews, max: maxViews } = viewFilterBounds.value;
+    const { min: minDuration, max: maxDuration } = durationFilterBounds.value;
     const shouldFilterViews = Boolean(minViewsFilter.value || maxViewsFilter.value);
+    const shouldFilterDuration = Boolean(minDurationFilter.value || maxDurationFilter.value);
 
     const filtered = videos.value.filter((video) => {
       if (channels.size > 0 && !channels.has(video.channel)) {
@@ -114,7 +122,14 @@ export const useVideoStore = defineStore("video", () => {
 
       if (shouldFilterViews) {
         const viewsCount = video.viewsCount || 0;
-        if (viewsCount < min || viewsCount > max) {
+        if (viewsCount < minViews || viewsCount > maxViews) {
+          return false;
+        }
+      }
+
+      if (shouldFilterDuration) {
+        const durationInSeconds = video.durationInSeconds || 0;
+        if (durationInSeconds < minDuration || durationInSeconds > maxDuration) {
           return false;
         }
       }
@@ -231,6 +246,8 @@ export const useVideoStore = defineStore("video", () => {
     channelFilter,
     minViewsFilter,
     maxViewsFilter,
+    minDurationFilter,
+    maxDurationFilter,
     publishedTimeFilter,
     only4KFilter,
     onlyOfficialFilter,
