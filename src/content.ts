@@ -161,7 +161,6 @@ class YouTubeVideoScanner {
     });
 
     this.videos = videos;
-    chrome.runtime.sendMessage({ action: "videosFound", videos });
   }
 
   init(): void {
@@ -179,7 +178,11 @@ class YouTubeVideoScanner {
     this.scanCurrentPage();
     const $contentsEl = $("#contents");
     if ($contentsEl.length > 0) {
-      const observer = new MutationObserver(() => this.scanCurrentPage());
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      const observer = new MutationObserver(() => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => this.scanCurrentPage(), 500);
+      });
       observer.observe($contentsEl[0], { childList: true, subtree: true });
     }
   }

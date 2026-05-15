@@ -62,6 +62,7 @@ const comparePublishedTimeLabels = (a: string, b: string, timestamps: Map<string
 export const useVideoStore = defineStore("video", () => {
   // State
   const videos = ref<VideoData[]>([]);
+  const selectedVideoIds = ref<string[]>([]);
   const sortBy = ref<SortOption>("duration");
   const channelFilter = ref<string[]>([]);
   const minViewsFilter = ref<string>("");
@@ -76,6 +77,7 @@ export const useVideoStore = defineStore("video", () => {
   const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search"));
 
   // Derived
+  const selectedVideoIdSet = computed(() => new Set(selectedVideoIds.value));
   const channelFilterSet = computed(() => new Set(channelFilter.value));
   const publishedTimeFilterSet = computed(() => new Set(publishedTimeFilter.value));
   const publishedTimeTimestamps = computed(() => createPublishedTimeTimestampMap(videos.value));
@@ -169,10 +171,42 @@ export const useVideoStore = defineStore("video", () => {
     });
   });
 
+  const allFilteredSelected = computed((): boolean => {
+    const visible = filteredVideos.value;
+    const selected = selectedVideoIdSet.value;
+    return visible.length > 0 && visible.every((v) => selected.has(v.videoId));
+  });
+
+  const someFilteredSelected = computed((): boolean => {
+    const selected = selectedVideoIdSet.value;
+    return filteredVideos.value.some((v) => selected.has(v.videoId));
+  });
+
   // Actions
+  function toggleVideoSelection(videoId: string): void {
+    const current = selectedVideoIds.value;
+    const idx = current.indexOf(videoId);
+    if (idx !== -1) {
+      selectedVideoIds.value = current.filter((id) => id !== videoId);
+    } else {
+      selectedVideoIds.value = [...current, videoId];
+    }
+  }
+
+  function toggleSelectAll(): void {
+    if (allFilteredSelected.value) {
+      const toRemove = new Set(filteredVideos.value.map((v) => v.videoId));
+      selectedVideoIds.value = selectedVideoIds.value.filter((id) => !toRemove.has(id));
+    } else {
+      const existing = new Set(selectedVideoIds.value);
+      const toAdd = filteredVideos.value.map((v) => v.videoId).filter((id) => !existing.has(id));
+      selectedVideoIds.value = [...selectedVideoIds.value, ...toAdd];
+    }
+  }
+
   async function loadFromStorage(): Promise<void> {
     const data = await chrome.storage.local.get(["videos"]);
-    videos.value = data.videos || [];
+    videos.value = Array.isArray(data.videos) ? data.videos : [];
   }
 
   async function checkCurrentTab(): Promise<void> {
@@ -207,7 +241,10 @@ export const useVideoStore = defineStore("video", () => {
   }
 
   async function addCurrentToQueue(): Promise<{ success: boolean; count?: number; error?: string }> {
-    const videosToQueue = filteredVideos.value;
+    const selected = selectedVideoIdSet.value;
+    const videosToQueue = selected.size > 0
+      ? filteredVideos.value.filter((v) => selected.has(v.videoId))
+      : filteredVideos.value;
 
     if (videosToQueue.length === 0) {
       return { success: false, error: "No videos found" };
@@ -242,6 +279,7 @@ export const useVideoStore = defineStore("video", () => {
   return {
     // State
     videos,
+    selectedVideoIds,
     sortBy,
     channelFilter,
     minViewsFilter,
@@ -255,10 +293,15 @@ export const useVideoStore = defineStore("video", () => {
     canScan,
     // Computed
     scanButtonText,
+    selectedVideoIdSet,
     uniqueChannels,
     uniquePublishedTimes,
     filteredVideos,
+    allFilteredSelected,
+    someFilteredSelected,
     // Actions
+    toggleVideoSelection,
+    toggleSelectAll,
     loadFromStorage,
     checkCurrentTab,
     scanCurrentPage,

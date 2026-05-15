@@ -48,8 +48,11 @@ onMounted(() => {
         {{ store.scanButtonText }}
       </button>
       <button @click="handleAddToQueue" :disabled="store.filteredVideos.length === 0 || store.isLoading"
-        class="rounded border border-transparent bg-blue-600 px-2 py-1 text-sm font-medium leading-none text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
+        class="flex items-center gap-1.5 rounded border border-transparent bg-blue-600 px-2 py-1 text-sm font-medium leading-none text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
         Queue
+        <span class="rounded-full bg-white/25 px-1.5 py-0.5 text-xs font-semibold leading-none">
+          {{ store.someFilteredSelected ? store.filteredVideos.filter(v => store.selectedVideoIdSet.has(v.videoId)).length : store.filteredVideos.length }}
+        </span>
       </button>
     </div>
 

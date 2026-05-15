@@ -1,5 +1,34 @@
+<script setup lang="ts">
+import type { VideoData } from "../types";
+import { useVideoStore } from "../stores/videoStore";
+import VideoItem from "./VideoItem.vue";
+
+interface Props {
+    filteredVideos: VideoData[];
+}
+
+defineProps<Props>();
+
+const store = useVideoStore();
+</script>
+
 <template>
     <div v-if="filteredVideos.length > 0" class="space-y-1.5">
+        <div class="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1.5">
+            <input
+                type="checkbox"
+                :checked="store.allFilteredSelected"
+                :indeterminate="store.someFilteredSelected && !store.allFilteredSelected"
+                @change="store.toggleSelectAll()"
+                class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <span class="text-sm text-gray-600">
+                Select all
+                <span v-if="store.someFilteredSelected" class="text-blue-600 font-medium">
+                    ({{ filteredVideos.filter(v => store.selectedVideoIdSet.has(v.videoId)).length }} selected)
+                </span>
+            </span>
+        </div>
         <VideoItem v-for="video in filteredVideos" :key="video.videoId" :video="video" />
     </div>
     <div v-else class="rounded-md border border-gray-200 bg-white p-4 text-center">
@@ -17,14 +46,3 @@
         </p>
     </div>
 </template>
-
-<script setup lang="ts">
-import type { VideoData } from "../types";
-import VideoItem from "./VideoItem.vue";
-
-interface Props {
-    filteredVideos: VideoData[];
-}
-
-defineProps<Props>();
-</script>

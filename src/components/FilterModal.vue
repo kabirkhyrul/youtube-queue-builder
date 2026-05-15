@@ -14,7 +14,16 @@
                 <div class="flex max-h-[70vh] w-80 flex-col rounded-lg bg-white shadow-xl">
                     <!-- Header -->
                     <div class="flex items-center justify-between border-b border-gray-200 px-3 py-2">
-                        <span class="text-sm font-medium text-gray-800">{{ placeholder }}</span>
+                        <label class="flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                :checked="allSelected"
+                                :indeterminate="someSelected && !allSelected"
+                                @change="toggleAll"
+                                class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span class="text-sm font-medium text-gray-800">{{ placeholder }}</span>
+                        </label>
                         <button @click="open = false" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -57,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { shallowRef } from "vue";
+import { shallowRef, computed } from "vue";
 
 const props = defineProps<{
     modelValue: string[];
@@ -72,12 +81,28 @@ const emit = defineEmits<{
 
 const open = shallowRef(false);
 
+const allSelected = computed((): boolean =>
+    props.items.length > 0 && props.items.every((item) => props.modelValue.includes(item))
+);
+
+const someSelected = computed((): boolean =>
+    props.items.some((item) => props.modelValue.includes(item))
+);
+
 const toggle = (item: string): void => {
     const current = props.modelValue;
     if (current.includes(item)) {
         emit("update:modelValue", current.filter((v) => v !== item));
     } else {
         emit("update:modelValue", [...current, item]);
+    }
+};
+
+const toggleAll = (): void => {
+    if (allSelected.value) {
+        emit("update:modelValue", []);
+    } else {
+        emit("update:modelValue", [...props.items]);
     }
 };
 </script>
