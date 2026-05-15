@@ -86,39 +86,62 @@ class YouTubeVideoScanner {
     return parseInt(cleanText) || 0;
   }
 
+  getChannelPageName(): { name: string; url: string } {
+    // channel-title is in the search result sidebar; on the channel page itself
+    // the channel name lives in ytd-channel-name#channel-title yt-formatted-string#text
+    const $nameEl = $("ytd-channel-name#channel-title yt-formatted-string#text");
+    if ($nameEl.length > 0) {
+      const name = $nameEl.text().trim();
+      const href = $nameEl.find("a").attr("href") || location.pathname.replace(/\/videos.*$/, "");
+      return { name, url: href };
+    }
+    // Fallback: parse the page <title> e.g. "Sony Music South - YouTube"
+    const name = document.title.replace(/\s*-\s*YouTube$/, "").trim() || "Unknown Channel";
+    return { name, url: location.pathname.replace(/\/videos.*$/, "") };
+  }
+
   extractVideoData(videoElement: Element): VideoData | null {
     const $video = $(videoElement);
-    const $titleEl = $video.find("#video-title");
-    const $durationEl = $video.find(".ytBadgeShapeText").first();
-    const $channelEl = $video.find(".long-byline #text > a");
-    const $metaItems = $video.find(".inline-metadata-item");
-    const $viewsEl = $metaItems.eq(0);
-    const $timeEl = $metaItems.eq(1);
-    const $thumbnailEl = $video.find("yt-image img");
-    const $descriptionEl = $video.find(".metadata-snippet-text");
     const $badges = $video.find(".ytBadgeShapeText");
+    const $durationEl = $badges.first();
 
-    if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
+    // Channel page uses yt-lockup-view-model inside ytd-rich-item-renderer
+    const $lockupTitleEl = $video.find("a.ytLockupMetadataViewModelTitle");
+    const isChannelPage = $lockupTitleEl.length > 0;
 
-    const title = $titleEl.text().trim();
-    const duration = $durationEl.text().trim();
-    const url = $titleEl.attr("href") || "";
+    let title: string, url: string, thumbnail: string, views: string, publishedTime: string, description: string, channel: string, channelUrl: string;
+
+    if (isChannelPage) {
+      const $h3 = $video.find("h3.ytLockupMetadataViewModelHeadingReset");
+      title = $h3.attr("title")?.trim() || $lockupTitleEl.text().trim();
+      url = $lockupTitleEl.attr("href") || $video.find("a.ytLockupViewModelContentImage").attr("href") || "";
+      thumbnail = $video.find(".ytThumbnailViewModelImage img").attr("src") || "";
+      const $metaSpans = $video.find(".ytContentMetadataViewModelMetadataText");
+      views = $metaSpans.eq(0).text().trim() || "0 views";
+      publishedTime = $metaSpans.eq(1).text().trim() || "Unknown";
+      description = "";
+      const channelInfo = this.getChannelPageName();
+      channel = channelInfo.name;
+      channelUrl = channelInfo.url;
+    } else {
+      const $titleEl = $video.find("#video-title");
+      if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
+      title = $titleEl.text().trim();
+      url = $titleEl.attr("href") || "";
+      thumbnail = $video.find("yt-image img").attr("src") || "";
+      const $metaItems = $video.find(".inline-metadata-item");
+      views = $metaItems.eq(0).text().trim() || "0 views";
+      publishedTime = $metaItems.eq(1).text().trim() || "Unknown";
+      description = $video.find(".metadata-snippet-text").text().trim();
+      const $channelEl = $video.find(".long-byline #text > a");
+      channel = $channelEl.length > 0 ? $channelEl.text().trim() : "Unknown Channel";
+      channelUrl = $channelEl.length > 0 ? $channelEl.attr("href") || "" : "";
+    }
+
     const videoId = this.extractVideoId(url);
-    const channel =
-      $channelEl.length > 0 ? $channelEl.text().trim() : "Unknown Channel";
-    const channelUrl =
-      $channelEl.length > 0 ? $channelEl.attr("href") || "" : "";
-    const views = $viewsEl.length > 0 ? $viewsEl.text().trim() : "0 views";
-    const publishedTime =
-      $timeEl.length > 0 ? $timeEl.text().trim() : "Unknown";
-
-    const thumbnail =
-      $thumbnailEl.length > 0 ? $thumbnailEl.attr("src") || "" : "";
-    const description =
-      $descriptionEl.length > 0 ? $descriptionEl.text().trim() : "";
-
     if (!videoId) return null;
 
+    const duration = $durationEl.text().trim();
     const is4K = $badges.toArray().some((el) => $(el).text().trim().toLowerCase() === "4k");
     const isOfficialChannel = $video.find("badge-shape[aria-label='Official Artist Channel']").length > 0;
     const viewsCount = this.parseViews(views);
@@ -151,8 +174,15 @@ class YouTubeVideoScanner {
     return match ? match[1] : null;
   }
 
+  isChannelVideosPage(): boolean {
+    return /^\/@[^/]+\/videos/.test(location.pathname);
+  }
+
   scanCurrentPage(): void {
-    const $videoContainers = $("ytd-video-renderer");
+    const selector = this.isChannelVideosPage()
+      ? "ytd-rich-item-renderer"
+      : "ytd-video-renderer";
+    const $videoContainers = $(selector);
     const videos: VideoData[] = [];
 
     $videoContainers.each((index, container) => {
@@ -164,8 +194,8 @@ class YouTubeVideoScanner {
   }
 
   init(): void {
-    if (location.pathname === "/results") {
-      // Wait for page to be fully loaded
+    const onPage = location.pathname === "/results" || this.isChannelVideosPage();
+    if (onPage) {
       if (document.readyState === "loading") {
         $(document).ready(() => this.setupScanning());
       } else {

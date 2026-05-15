@@ -74,7 +74,7 @@ export const useVideoStore = defineStore("video", () => {
   const onlyOfficialFilter = ref<boolean>(false);
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
-  const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search"));
+  const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search or Channel Videos"));
 
   // Derived
   const selectedVideoIdSet = computed(() => new Set(selectedVideoIds.value));
@@ -209,10 +209,14 @@ export const useVideoStore = defineStore("video", () => {
     videos.value = Array.isArray(data.videos) ? data.videos : [];
   }
 
+  function isScannablePage(url: string): boolean {
+    return url.includes("youtube.com/results") || /youtube\.com\/@[^/]+\/videos/.test(url);
+  }
+
   async function checkCurrentTab(): Promise<void> {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      canScan.value = !!(tab.url && tab.url.includes("youtube.com/results"));
+      canScan.value = !!(tab.url && isScannablePage(tab.url));
     } catch (error) {
       console.error("Error checking current tab:", error);
     }
@@ -222,8 +226,8 @@ export const useVideoStore = defineStore("video", () => {
     isLoading.value = true;
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab.url || !tab.url.includes("youtube.com/results")) {
-        return "Please navigate to YouTube search results first";
+      if (!tab.url || !isScannablePage(tab.url)) {
+        return "Please navigate to YouTube search results or a channel's Videos tab first";
       }
       const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanPage" });
       if (response.success) {
