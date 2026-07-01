@@ -19,6 +19,18 @@ interface VideoData {
   viewsPerDay: number;
 }
 
+interface QueueVideo {
+  videoId: string;
+  title?: string;
+}
+
+interface QueueResult {
+  success: boolean;
+  count: number;
+  failed?: string[];
+  error?: string;
+}
+
 
 declare global {
   interface Window {
@@ -174,18 +186,136 @@ class YouTubeVideoScanner {
     return match ? match[1] : null;
   }
 
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  getVideoContainers(): Element[] {
+    const selector = this.isChannelVideosPage()
+      ? "ytd-rich-item-renderer"
+      : "ytd-video-renderer";
+
+    return $(selector).toArray();
+  }
+
+  findVideoElement(videoId: string): Element | null {
+    return this.getVideoContainers().find((container) => {
+      const links = Array.from(container.querySelectorAll<HTMLAnchorElement>("a[href]"));
+      return links.some((link) => this.extractVideoId(link.href) === videoId);
+    }) ?? null;
+  }
+
+  findMenuButton(videoElement: Element): HTMLElement | null {
+    return videoElement.querySelector<HTMLElement>(
+      "ytd-menu-renderer yt-icon-button#button button, ytd-menu-renderer button[aria-label='Action menu'], ytd-menu-renderer button[aria-label='More actions'], ytd-menu-renderer button"
+    );
+  }
+
+  clickElement(element: HTMLElement): void {
+    element.scrollIntoView({ block: "center", inline: "nearest" });
+    element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
+    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+    element.click();
+  }
+
+  isVisible(element: Element): boolean {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  findAddToQueueMenuItem(): HTMLElement | null {
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>("tp-yt-paper-item[role='menuitem'], ytd-menu-service-item-renderer")
+    );
+
+    return items.find((item) => {
+      const title = item.querySelector("yt-formatted-string.title")?.textContent ?? item.textContent ?? "";
+      return title.trim().toLowerCase() === "add to queue" && this.isVisible(item);
+    }) ?? null;
+  }
+
+  async waitForElement(getElement: () => HTMLElement | null, timeoutMs = 2500): Promise<HTMLElement | null> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const element = getElement();
+      if (element) return element;
+      await this.sleep(100);
+    }
+
+    return null;
+  }
+
+  closeOpenMenu(): void {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  }
+
+  async addVideoToQueue(video: QueueVideo): Promise<boolean> {
+    const videoElement = this.findVideoElement(video.videoId);
+    if (!videoElement) return false;
+
+    const menuButton = this.findMenuButton(videoElement);
+    if (!menuButton) return false;
+
+    this.clickElement(menuButton);
+
+    const addToQueueItem = await this.waitForElement(() => this.findAddToQueueMenuItem());
+    if (!addToQueueItem) {
+      this.closeOpenMenu();
+      return false;
+    }
+
+    this.clickElement(addToQueueItem);
+    await this.sleep(500);
+    return true;
+  }
+
+  async addVideosToQueue(videos: QueueVideo[]): Promise<QueueResult> {
+    if (!videos.length) {
+      return { success: false, count: 0, error: "No videos to queue." };
+    }
+
+    this.scanCurrentPage();
+
+    const failed: string[] = [];
+    let count = 0;
+
+    for (const video of videos) {
+      const added = await this.addVideoToQueue(video);
+      if (added) {
+        count += 1;
+      } else {
+        failed.push(video.title || video.videoId);
+      }
+    }
+
+    if (count === 0) {
+      return {
+        success: false,
+        count,
+        failed,
+        error: "Could not find YouTube's Add to queue action for the selected videos.",
+      };
+    }
+
+    return {
+      success: true,
+      count,
+      failed: failed.length > 0 ? failed : undefined,
+      error: failed.length > 0 ? `${failed.length} videos could not be queued because their menu item was not found.` : undefined,
+    };
+  }
+
   isChannelVideosPage(): boolean {
     return /^\/@[^/]+\/videos/.test(location.pathname);
   }
 
   scanCurrentPage(): void {
-    const selector = this.isChannelVideosPage()
-      ? "ytd-rich-item-renderer"
-      : "ytd-video-renderer";
-    const $videoContainers = $(selector);
+    const videoContainers = this.getVideoContainers();
     const videos: VideoData[] = [];
 
-    $videoContainers.each((index, container) => {
+    videoContainers.forEach((container) => {
       const data = this.extractVideoData(container);
       if (data) videos.push(data);
     });
@@ -234,6 +364,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
     } else if (request.action === "getVideos" && window.youtubeScanner) {
       sendResponse({ videos: window.youtubeScanner.videos });
+    } else if (request.action === "addCurrentToQueue" && window.youtubeScanner) {
+      window.youtubeScanner.addVideosToQueue(request.videos ?? []).then(sendResponse);
+      return true;
     } else {
       sendResponse({
         success: false,

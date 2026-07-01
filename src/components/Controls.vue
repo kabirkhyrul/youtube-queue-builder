@@ -26,7 +26,10 @@ const handleScan = async (): Promise<void> => {
 const handleAddToQueue = async (): Promise<void> => {
   const result = await store.addCurrentToQueue();
   if (result.success) {
-    props.notificationsRef?.showMessage(`Added ${result.count} videos to YouTube queue!`);
+    const message = result.error
+      ? `Added ${result.count} videos to YouTube queue. ${result.error}`
+      : `Added ${result.count} videos to YouTube queue!`;
+    props.notificationsRef?.showMessage(message);
   } else {
     props.notificationsRef?.showMessage("Queue failed: " + result.error, "error");
   }

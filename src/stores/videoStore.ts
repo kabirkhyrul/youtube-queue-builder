@@ -4,6 +4,12 @@ import type { VideoData } from "../types";
 
 type SortOption = "duration" | "title" | "channel" | "views" | "viewsPerDay" | "publishedTime";
 
+type QueueResult = {
+  success: boolean;
+  count?: number;
+  error?: string;
+};
+
 const publishedTimeUnits = [
   { keys: ["millisecond", "milliseconds", "ms"], ms: 1 },
   { keys: ["second", "seconds", "sec", "secs", "s"], ms: 1000 },
@@ -275,9 +281,16 @@ export const useVideoStore = defineStore("video", () => {
     }
     isLoading.value = true;
     try {
-      const response = await new Promise<any>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Request timeout")), 10000);
-        chrome.runtime.sendMessage(
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab.id || !tab.url || !isScannablePage(tab.url)) {
+        return { success: false, error: "Please navigate to YouTube search results or a channel's Videos tab first" };
+      }
+
+      const response = await new Promise<QueueResult>((resolve, reject) => {
+        const timeoutMs = Math.max(30000, videosToQueue.length * 2500);
+        const timeout = setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+        chrome.tabs.sendMessage(
+          tab.id,
           { action: "addCurrentToQueue", videos: videosToQueue },
           (res) => {
             clearTimeout(timeout);
@@ -289,10 +302,10 @@ export const useVideoStore = defineStore("video", () => {
           }
         );
       });
-      if (response?.success) {
-        return { success: true, count: response.count };
+      if (response.success) {
+        return { success: true, count: response.count, error: response.error };
       }
-      return { success: false, error: response?.error ?? "No response received" };
+      return { success: false, error: response.error ?? "No response received" };
     } catch (error) {
       return { success: false, error: (error as Error).message };
     } finally {
