@@ -6,6 +6,7 @@ import SortFilter from "./SortFilter.vue";
 import ChannelFilter from "./ChannelFilter.vue";
 import ViewsFilter from "./ViewsFilter.vue";
 import DateFilter from "./DateFilter.vue";
+import TitleWordFilter from "./TitleWordFilter.vue";
 
 const props = defineProps<{
   notificationsRef: InstanceType<typeof Notifications> | null;
@@ -64,6 +65,8 @@ onMounted(() => {
         <DateFilter :modelValue="store.publishedTimeFilter" :dates="store.uniquePublishedTimes"
           @update:modelValue="(v: string[]) => store.publishedTimeFilter = v" />
       </div>
+      <TitleWordFilter :modelValue="store.titleWordFilter" :words="store.uniqueTitleWords"
+        @update:modelValue="store.titleWordFilter = $event" />
       <div class="grid grid-cols-2 gap-1.5">
         <ViewsFilter :min="store.minViewsFilter" :max="store.maxViewsFilter"
           @update:min="store.minViewsFilter = $event" @update:max="store.maxViewsFilter = $event" />

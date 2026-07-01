@@ -63,13 +63,14 @@ export const useVideoStore = defineStore("video", () => {
   // State
   const videos = ref<VideoData[]>([]);
   const selectedVideoIds = ref<string[]>([]);
-  const sortBy = ref<SortOption>("duration");
+  const sortBy = ref<SortOption>("views");
   const channelFilter = ref<string[]>([]);
-  const minViewsFilter = ref<string>("");
+  const minViewsFilter = ref<string>("99999999");
   const maxViewsFilter = ref<string>("");
-  const minDurationFilter = ref<string>("");
+  const minDurationFilter = ref<string>("240");
   const maxDurationFilter = ref<string>("");
   const publishedTimeFilter = ref<string[]>([]);
+  const titleWordFilter = ref<string[]>([]);
   const only4KFilter = ref<boolean>(false);
   const onlyOfficialFilter = ref<boolean>(false);
   const isLoading = ref<boolean>(false);
@@ -89,6 +90,17 @@ export const useVideoStore = defineStore("video", () => {
     min: minDurationFilter.value ? Number(minDurationFilter.value) : 0,
     max: maxDurationFilter.value ? Number(maxDurationFilter.value) : Infinity,
   }));
+
+  const uniqueTitleWords = computed((): string[] => {
+    const words = new Set<string>();
+    for (const video of videos.value) {
+      for (const segment of video.title.split("|").slice(1)) {
+        const trimmed = segment.trim();
+        if (trimmed.length > 0) words.add(trimmed);
+      }
+    }
+    return [...words].sort();
+  });
 
   const uniqueChannels = computed((): string[] => {
     const channels = new Set<string>();
@@ -116,6 +128,7 @@ export const useVideoStore = defineStore("video", () => {
     const { min: minDuration, max: maxDuration } = durationFilterBounds.value;
     const shouldFilterViews = Boolean(minViewsFilter.value || maxViewsFilter.value);
     const shouldFilterDuration = Boolean(minDurationFilter.value || maxDurationFilter.value);
+    const titleWords = titleWordFilter.value;
 
     const filtered = videos.value.filter((video) => {
       if (channels.size > 0 && !channels.has(video.channel)) {
@@ -138,6 +151,13 @@ export const useVideoStore = defineStore("video", () => {
 
       if (publishedTimes.size > 0 && !publishedTimes.has(video.publishedTime)) {
         return false;
+      }
+
+      if (titleWords.length > 0) {
+        const segments = video.title.split("|").map((s) => s.trim());
+        if (titleWords.some((w) => segments.includes(w))) {
+          return false;
+        }
       }
 
       if (only4KFilter.value && !video.is4K) {
@@ -291,6 +311,7 @@ export const useVideoStore = defineStore("video", () => {
     minDurationFilter,
     maxDurationFilter,
     publishedTimeFilter,
+    titleWordFilter,
     only4KFilter,
     onlyOfficialFilter,
     isLoading,
@@ -299,6 +320,7 @@ export const useVideoStore = defineStore("video", () => {
     scanButtonText,
     selectedVideoIdSet,
     uniqueChannels,
+    uniqueTitleWords,
     uniquePublishedTimes,
     filteredVideos,
     allFilteredSelected,
