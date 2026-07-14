@@ -1,17 +1,17 @@
 <template>
     <div class="relative">
         <!-- Selected tags -->
-        <div v-if="modelValue.length > 0" class="mb-1 flex flex-wrap gap-1">
+        <div v-if="modelValue.length > 0" class="mb-1.5 flex flex-wrap gap-1">
             <span
                 v-for="word in modelValue"
                 :key="word"
-                class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+                class="tag-badge"
             >
                 {{ word }}
                 <button
                     type="button"
                     @click="removeWord(word)"
-                    class="ml-0.5 text-blue-500 hover:text-blue-900 focus:outline-none"
+                    class="ml-0.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200 focus:outline-none cursor-pointer"
                     :aria-label="`Remove ${word}`"
                 >
                     <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -28,26 +28,26 @@
             placeholder="Exclude title words..."
             @focus="showDropdown = true"
             @blur="handleBlur"
-            class="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="input-field"
         />
 
         <!-- Dropdown -->
         <div
             v-if="showDropdown && filteredWords.length > 0"
-            class="absolute left-0 right-0 top-full z-50 mt-0.5 max-h-40 overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+            class="dropdown-menu"
         >
             <button
                 v-for="word in filteredWords"
                 :key="word"
                 type="button"
                 @mousedown.prevent="toggleWord(word)"
-                class="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                :class="{ 'bg-blue-50 text-blue-700 font-medium': modelValue.includes(word) }"
+                class="dropdown-item"
+                :class="{ 'dropdown-item-active': modelValue.includes(word) }"
             >
                 <input
                     type="checkbox"
                     :checked="modelValue.includes(word)"
-                    class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                    class="checkbox-custom"
                     tabindex="-1"
                     readonly
                 />
@@ -55,7 +55,7 @@
             </button>
         </div>
 
-        <p v-if="showDropdown && words.length === 0" class="absolute left-0 right-0 top-full z-50 mt-0.5 rounded border border-gray-200 bg-white px-2 py-2 text-center text-xs text-gray-400 shadow-lg">
+        <p v-if="showDropdown && words.length === 0" class="dropdown-menu px-2 py-2 text-center text-xs text-slate-400 dark:text-slate-500">
             No words available
         </p>
     </div>

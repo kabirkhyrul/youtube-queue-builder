@@ -4,10 +4,10 @@
         <div class="grid grid-cols-2 gap-1.5">
             <input type="number" min="0" :value="min"
                 @input="$emit('update:min', ($event.target as HTMLInputElement).value)" :placeholder="minPlaceholder"
-                class="w-full rounded border border-gray-300 px-2 py-1 text-sm leading-none" />
+                class="input-field" />
             <input type="number" min="0" :value="max"
                 @input="$emit('update:max', ($event.target as HTMLInputElement).value)" :placeholder="maxPlaceholder"
-                class="w-full rounded border border-gray-300 px-2 py-1 text-sm leading-none" />
+                class="input-field" />
         </div>
     </div>
 </template>

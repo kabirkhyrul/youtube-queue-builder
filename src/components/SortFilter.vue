@@ -1,13 +1,15 @@
 <template>
     <div>
-        <label class="sr-only">Sort by</label>
-        <div class="flex flex-wrap gap-x-2 gap-y-1">
-            <label v-for="(label, value) in labels" :key="value" class="flex cursor-pointer items-center gap-1">
-                <input type="radio" :value="value" :checked="modelValue === value"
-                    @change="$emit('update:modelValue', value)"
-                    class="h-3 w-3 border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm leading-none text-gray-700">{{ label }}</span>
-            </label>
+        <span class="sr-only">Sort by</span>
+        <div class="flex flex-wrap gap-1">
+            <button v-for="(label, value) in labels" :key="value"
+                type="button"
+                @click="$emit('update:modelValue', value)"
+                class="pill-sort"
+                :class="modelValue === value ? 'pill-sort-active' : ''"
+            >
+                {{ label }}
+            </button>
         </div>
     </div>
 </template>
