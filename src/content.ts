@@ -1,5 +1,3 @@
-import $ from "jquery";
-
 interface VideoData {
   title: string;
   duration: string;
@@ -101,10 +99,10 @@ class YouTubeVideoScanner {
   getChannelPageName(): { name: string; url: string } {
     // channel-title is in the search result sidebar; on the channel page itself
     // the channel name lives in ytd-channel-name#channel-title yt-formatted-string#text
-    const $nameEl = $("ytd-channel-name#channel-title yt-formatted-string#text");
-    if ($nameEl.length > 0) {
-      const name = $nameEl.text().trim();
-      const href = $nameEl.find("a").attr("href") || location.pathname.replace(/\/videos.*$/, "");
+    const nameEl = document.querySelector<HTMLElement>("ytd-channel-name#channel-title yt-formatted-string#text");
+    if (nameEl) {
+      const name = nameEl.textContent?.trim() || "";
+      const href = nameEl.querySelector<HTMLAnchorElement>("a")?.getAttribute("href") || location.pathname.replace(/\/videos.*$/, "");
       return { name, url: href };
     }
     // Fallback: parse the page <title> e.g. "Sony Music South - YouTube"
@@ -113,49 +111,48 @@ class YouTubeVideoScanner {
   }
 
   extractVideoData(videoElement: Element): VideoData | null {
-    const $video = $(videoElement);
-    const $badges = $video.find(".ytBadgeShapeText");
-    const $durationEl = $badges.first();
+    const badges = Array.from(videoElement.querySelectorAll<HTMLElement>(".ytBadgeShapeText"));
+    const durationEl = badges[0];
 
     // Channel page uses yt-lockup-view-model inside ytd-rich-item-renderer
-    const $lockupTitleEl = $video.find("a.ytLockupMetadataViewModelTitle");
-    const isChannelPage = $lockupTitleEl.length > 0;
+    const lockupTitleEl = videoElement.querySelector<HTMLAnchorElement>("a.ytLockupMetadataViewModelTitle");
+    const isChannelPage = !!lockupTitleEl;
 
     let title: string, url: string, thumbnail: string, views: string, publishedTime: string, description: string, channel: string, channelUrl: string;
 
     if (isChannelPage) {
-      const $h3 = $video.find("h3.ytLockupMetadataViewModelHeadingReset");
-      title = $h3.attr("title")?.trim() || $lockupTitleEl.text().trim();
-      url = $lockupTitleEl.attr("href") || $video.find("a.ytLockupViewModelContentImage").attr("href") || "";
-      thumbnail = $video.find(".ytThumbnailViewModelImage img").attr("src") || "";
-      const $metaSpans = $video.find(".ytContentMetadataViewModelMetadataText");
-      views = $metaSpans.eq(0).text().trim() || "0 views";
-      publishedTime = $metaSpans.eq(1).text().trim() || "Unknown";
+      const h3 = videoElement.querySelector<HTMLElement>("h3.ytLockupMetadataViewModelHeadingReset");
+      title = h3?.getAttribute("title")?.trim() || lockupTitleEl?.textContent?.trim() || "";
+      url = lockupTitleEl?.getAttribute("href") || videoElement.querySelector<HTMLAnchorElement>("a.ytLockupViewModelContentImage")?.getAttribute("href") || "";
+      thumbnail = videoElement.querySelector<HTMLImageElement>(".ytThumbnailViewModelImage img")?.getAttribute("src") || "";
+      const metaSpans = Array.from(videoElement.querySelectorAll<HTMLElement>(".ytContentMetadataViewModelMetadataText"));
+      views = metaSpans[0]?.textContent?.trim() || "0 views";
+      publishedTime = metaSpans[1]?.textContent?.trim() || "Unknown";
       description = "";
       const channelInfo = this.getChannelPageName();
       channel = channelInfo.name;
       channelUrl = channelInfo.url;
     } else {
-      const $titleEl = $video.find("#video-title");
-      if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
-      title = $titleEl.text().trim();
-      url = $titleEl.attr("href") || "";
-      thumbnail = $video.find("yt-image img").attr("src") || "";
-      const $metaItems = $video.find(".inline-metadata-item");
-      views = $metaItems.eq(0).text().trim() || "0 views";
-      publishedTime = $metaItems.eq(1).text().trim() || "Unknown";
-      description = $video.find(".metadata-snippet-text").text().trim();
-      const $channelEl = $video.find(".long-byline #text > a");
-      channel = $channelEl.length > 0 ? $channelEl.text().trim() : "Unknown Channel";
-      channelUrl = $channelEl.length > 0 ? $channelEl.attr("href") || "" : "";
+      const titleEl = videoElement.querySelector<HTMLAnchorElement>("#video-title");
+      if (!titleEl?.getAttribute("href")) return null;
+      title = titleEl.textContent?.trim() || "";
+      url = titleEl.getAttribute("href") || "";
+      thumbnail = videoElement.querySelector<HTMLImageElement>("yt-image img")?.getAttribute("src") || "";
+      const metaItems = Array.from(videoElement.querySelectorAll<HTMLElement>(".inline-metadata-item"));
+      views = metaItems[0]?.textContent?.trim() || "0 views";
+      publishedTime = metaItems[1]?.textContent?.trim() || "Unknown";
+      description = videoElement.querySelector<HTMLElement>(".metadata-snippet-text")?.textContent?.trim() || "";
+      const channelEl = videoElement.querySelector<HTMLAnchorElement>(".long-byline #text > a");
+      channel = channelEl ? channelEl.textContent?.trim() || "" : "Unknown Channel";
+      channelUrl = channelEl?.getAttribute("href") || "";
     }
 
     const videoId = this.extractVideoId(url);
     if (!videoId) return null;
 
-    const duration = $durationEl.text().trim();
-    const is4K = $badges.toArray().some((el) => $(el).text().trim().toLowerCase() === "4k");
-    const isOfficialChannel = $video.find("badge-shape[aria-label='Official Artist Channel']").length > 0;
+    const duration = durationEl?.textContent?.trim() || "";
+    const is4K = badges.some((el) => el.textContent?.trim().toLowerCase() === "4k");
+    const isOfficialChannel = !!videoElement.querySelector("badge-shape[aria-label='Official Artist Channel']");
     const viewsCount = this.parseViews(views);
     const ageDays = this.publishedTimeToDays(publishedTime);
     const viewsPerDay = ageDays > 0 ? Math.round(viewsCount / ageDays) : viewsCount;
@@ -195,7 +192,7 @@ class YouTubeVideoScanner {
       ? "ytd-rich-item-renderer"
       : "ytd-video-renderer";
 
-    return $(selector).toArray();
+    return Array.from(document.querySelectorAll(selector));
   }
 
   findVideoElement(videoId: string): Element | null {
@@ -327,7 +324,7 @@ class YouTubeVideoScanner {
     const onPage = location.pathname === "/results" || this.isChannelVideosPage();
     if (onPage) {
       if (document.readyState === "loading") {
-        $(document).ready(() => this.setupScanning());
+        document.addEventListener("DOMContentLoaded", () => this.setupScanning(), { once: true });
       } else {
         this.setupScanning();
       }
@@ -336,26 +333,32 @@ class YouTubeVideoScanner {
 
   setupScanning(): void {
     this.scanCurrentPage();
-    const $contentsEl = $("#contents");
-    if ($contentsEl.length > 0) {
+    const contentsEl = document.querySelector<HTMLElement>("#contents");
+    if (contentsEl) {
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;
       const observer = new MutationObserver(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => this.scanCurrentPage(), 500);
       });
-      observer.observe($contentsEl[0], { childList: true, subtree: true });
+      observer.observe(contentsEl, { childList: true, subtree: true });
     }
   }
 }
 
 // Initialize when DOM is ready
-$(document).ready(function () {
+const initializeScanner = () => {
   const scanner = new YouTubeVideoScanner();
   scanner.init();
 
   // Make scanner available globally for message listener
   window.youtubeScanner = scanner;
-});
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeScanner, { once: true });
+} else {
+  initializeScanner();
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
