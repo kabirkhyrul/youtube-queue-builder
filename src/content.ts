@@ -38,9 +38,18 @@ declare global {
 
 class YouTubeVideoScanner {
   videos: VideoData[];
+  scanDiagnostics: string[];
 
   constructor() {
     this.videos = [];
+    this.scanDiagnostics = [];
+  }
+
+  reportDiagnostic(message: string, context?: Record<string, string>): void {
+    const details = context ? ` ${JSON.stringify(context)}` : "";
+    const diagnostic = `[YouTube Queue Builder] ${message}${details}`;
+    this.scanDiagnostics.push(diagnostic);
+    console.warn(diagnostic);
   }
 
   publishedTimeToDays(publishedTime: string): number {
@@ -178,28 +187,65 @@ class YouTubeVideoScanner {
   }
 
   extractVideoId(url: string): string | null {
-    const match =
-      url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&]+)/);
-    return match ? match[1] : null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.pathname !== "/watch") return null;
+      return parsed.searchParams.get("v");
+    } catch {
+      this.reportDiagnostic("Unable to parse video link", { url });
+      return null;
+    }
   }
 
   sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  getVideoContainers(): Element[] {
-    const selector = this.isChannelVideosPage()
-      ? "ytd-rich-item-renderer"
-      : "ytd-video-renderer";
+  getVideoLinks(): HTMLAnchorElement[] {
+    return Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="watch?v="]'));
+  }
 
-    return Array.from(document.querySelectorAll(selector));
+  findVideoCard(videoLink: HTMLAnchorElement, videoId: string): Element | null {
+    let current: Element | null = videoLink;
+    let fallback: Element | null = null;
+
+    while (current && current !== document.body) {
+      const matchingLinks = Array.from(current.querySelectorAll<HTMLAnchorElement>('a[href*="watch?v="]'))
+        .filter((link) => this.extractVideoId(link.href) === videoId);
+      const hasTitle = !!current.querySelector("#video-title, a.ytLockupMetadataViewModelTitle");
+
+      if (hasTitle && matchingLinks.length >= 2) return current;
+      if (!fallback && hasTitle && matchingLinks.length > 0) fallback = current;
+      current = current.parentElement;
+    }
+
+    if (fallback) return fallback;
+
+    this.reportDiagnostic("Could not resolve a video card from watch link", { videoId });
+    return null;
+  }
+
+  getVideoCards(): Element[] {
+    const cards: Element[] = [];
+    const seenIds = new Set<string>();
+
+    for (const link of this.getVideoLinks()) {
+      const videoId = this.extractVideoId(link.href);
+      if (!videoId || seenIds.has(videoId)) continue;
+
+      const card = this.findVideoCard(link, videoId);
+      if (card) {
+        seenIds.add(videoId);
+        cards.push(card);
+      }
+    }
+
+    return cards;
   }
 
   findVideoElement(videoId: string): Element | null {
-    return this.getVideoContainers().find((container) => {
-      const links = Array.from(container.querySelectorAll<HTMLAnchorElement>("a[href]"));
-      return links.some((link) => this.extractVideoId(link.href) === videoId);
-    }) ?? null;
+    const link = this.getVideoLinks().find((candidate) => this.extractVideoId(candidate.href) === videoId);
+    return link ? this.findVideoCard(link, videoId) : null;
   }
 
   findMenuButton(videoElement: Element): HTMLElement | null {
@@ -308,21 +354,30 @@ class YouTubeVideoScanner {
     return /^\/@[^/]+\/videos/.test(location.pathname);
   }
 
+  isYouTubePage(): boolean {
+    return location.hostname === "www.youtube.com";
+  }
+
   scanCurrentPage(): void {
-    const videoContainers = this.getVideoContainers();
+    this.scanDiagnostics = [];
+    const videoCards = this.getVideoCards();
     const videos: VideoData[] = [];
 
-    videoContainers.forEach((container) => {
-      const data = this.extractVideoData(container);
-      if (data) videos.push(data);
+    videoCards.forEach((card) => {
+      const data = this.extractVideoData(card);
+      if (data) {
+        videos.push(data);
+      } else {
+        this.reportDiagnostic("Skipped a video card because required metadata was missing");
+      }
     });
 
     this.videos = videos;
+    console.debug(`[YouTube Queue Builder] Scan complete: ${videos.length} videos, ${this.scanDiagnostics.length} diagnostics`);
   }
 
   init(): void {
-    const onPage = location.pathname === "/results" || this.isChannelVideosPage();
-    if (onPage) {
+    if (this.isYouTubePage()) {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => this.setupScanning(), { once: true });
       } else {
@@ -333,14 +388,14 @@ class YouTubeVideoScanner {
 
   setupScanning(): void {
     this.scanCurrentPage();
-    const contentsEl = document.querySelector<HTMLElement>("#contents");
-    if (contentsEl) {
+    const observationRoot = document.querySelector<HTMLElement>("#contents") || document.body;
+    if (observationRoot) {
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;
       const observer = new MutationObserver(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => this.scanCurrentPage(), 500);
       });
-      observer.observe(contentsEl, { childList: true, subtree: true });
+      observer.observe(observationRoot, { childList: true, subtree: true });
     }
   }
 }

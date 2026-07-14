@@ -236,7 +236,11 @@ export const useVideoStore = defineStore("video", () => {
   }
 
   function isScannablePage(url: string): boolean {
-    return url.includes("youtube.com/results") || /youtube\.com\/@[^/]+\/videos/.test(url);
+    try {
+      return new URL(url).hostname === "www.youtube.com";
+    } catch {
+      return false;
+    }
   }
 
   async function checkCurrentTab(): Promise<void> {
@@ -253,7 +257,7 @@ export const useVideoStore = defineStore("video", () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab.url || !isScannablePage(tab.url)) {
-        return "Please navigate to YouTube search results or a channel's Videos tab first";
+        return "Please navigate to a YouTube page with visible video links first";
       }
       const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanPage" });
       if (response.success) {
@@ -283,7 +287,7 @@ export const useVideoStore = defineStore("video", () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab.id || !tab.url || !isScannablePage(tab.url)) {
-        return { success: false, error: "Please navigate to YouTube search results or a channel's Videos tab first" };
+        return { success: false, error: "Please navigate to a YouTube page with visible video links first" };
       }
 
       const response = await new Promise<QueueResult>((resolve, reject) => {
