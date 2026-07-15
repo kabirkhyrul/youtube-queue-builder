@@ -1,32 +1,29 @@
 <template>
     <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Filter by views:</label>
-        <div class="grid grid-cols-2 gap-2">
-            <input
-                type="number"
-                min="0"
-                :value="min"
-                @input="$emit('update:min', ($event.target as HTMLInputElement).value)"
-                placeholder="Min"
-                class="w-full text-sm border border-gray-300 rounded px-3 py-2"
-            />
-            <input
-                type="number"
-                min="0"
-                :value="max"
-                @input="$emit('update:max', ($event.target as HTMLInputElement).value)"
-                placeholder="Max"
-                class="w-full text-sm border border-gray-300 rounded px-3 py-2"
-            />
+        <label class="sr-only">{{ label }}</label>
+        <div class="grid grid-cols-2 gap-1.5">
+            <input type="number" min="0" :value="min"
+                @input="$emit('update:min', ($event.target as HTMLInputElement).value)" :placeholder="minPlaceholder"
+                class="input-field" />
+            <input type="number" min="0" :value="max"
+                @input="$emit('update:max', ($event.target as HTMLInputElement).value)" :placeholder="maxPlaceholder"
+                class="input-field" />
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
     min: string;
     max: string;
-}>();
+    label?: string;
+    minPlaceholder?: string;
+    maxPlaceholder?: string;
+}>(), {
+    label: "Filter by views",
+    minPlaceholder: "Min views",
+    maxPlaceholder: "Max views",
+});
 
 defineEmits<{
     "update:min": [value: string];

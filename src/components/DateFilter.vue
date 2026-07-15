@@ -1,15 +1,5 @@
-<template>
-    <FilterModal
-        :items="dates"
-        :model-value="modelValue"
-        placeholder="Filter by published time"
-        item-label="date"
-        @update:model-value="$emit('update:modelValue', $event)"
-    />
-</template>
-
 <script setup lang="ts">
-import FilterModal from "./FilterModal.vue";
+import DateFilterModal from "./DateFilterModal.vue";
 
 defineProps<{
     modelValue: string[];
@@ -20,3 +10,11 @@ defineEmits<{
     "update:modelValue": [value: string[]];
 }>();
 </script>
+
+<template>
+    <DateFilterModal
+        :dates="dates"
+        :model-value="modelValue"
+        @update:model-value="$emit('update:modelValue', $event)"
+    />
+</template>

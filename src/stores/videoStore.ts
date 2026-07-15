@@ -2,6 +2,14 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { VideoData } from "../types";
 
+type SortOption = "duration" | "title" | "channel" | "views" | "viewsPerDay" | "publishedTime";
+
+type QueueResult = {
+  success: boolean;
+  count?: number;
+  error?: string;
+};
+
 const publishedTimeUnits = [
   { keys: ["millisecond", "milliseconds", "ms"], ms: 1 },
   { keys: ["second", "seconds", "sec", "secs", "s"], ms: 1000 },
@@ -12,6 +20,8 @@ const publishedTimeUnits = [
   { keys: ["week", "weeks", "wk", "wks", "w"], ms: 1000 * 60 * 60 * 24 * 7 },
   { keys: ["year", "years", "yr", "yrs", "y"], ms: 1000 * 60 * 60 * 24 * 365 },
 ];
+
+const textCollator = new Intl.Collator(undefined, { sensitivity: "base" });
 
 const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): number => {
   const normalized = publishedTime.trim().toLowerCase();
@@ -31,89 +41,212 @@ const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): num
   return now - value * unit.ms;
 };
 
+const createPublishedTimeTimestampMap = (items: VideoData[]): Map<string, number> => {
+  const now = Date.now();
+  const timestamps = new Map<string, number>();
+
+  for (const video of items) {
+    if (video.publishedTime && !timestamps.has(video.publishedTime)) {
+      timestamps.set(video.publishedTime, getPublishedTimeTimestamp(video.publishedTime, now));
+    }
+  }
+
+  return timestamps;
+};
+
+const comparePublishedTimeLabels = (a: string, b: string, timestamps: Map<string, number>): number => {
+  const timestampA = timestamps.get(a) ?? Number.NEGATIVE_INFINITY;
+  const timestampB = timestamps.get(b) ?? Number.NEGATIVE_INFINITY;
+
+  if (timestampA === timestampB) {
+    return textCollator.compare(a, b);
+  }
+
+  return timestampB - timestampA;
+};
+
 export const useVideoStore = defineStore("video", () => {
   // State
   const videos = ref<VideoData[]>([]);
-  const sortBy = ref<string>("duration");
+  const selectedVideoIds = ref<string[]>([]);
+  const sortBy = ref<SortOption>("views");
   const channelFilter = ref<string[]>([]);
-  const minViewsFilter = ref<string>("");
+  const minViewsFilter = ref<string>("99999999");
   const maxViewsFilter = ref<string>("");
+  const minDurationFilter = ref<string>("240");
+  const maxDurationFilter = ref<string>("");
   const publishedTimeFilter = ref<string[]>([]);
+  const titleWordFilter = ref<string[]>([]);
+  const only4KFilter = ref<boolean>(false);
+  const onlyOfficialFilter = ref<boolean>(false);
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
-  const scanButtonText = ref<string>("Scan Current Page");
+  const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search or Channel Videos"));
 
   // Derived
+  const selectedVideoIdSet = computed(() => new Set(selectedVideoIds.value));
+  const channelFilterSet = computed(() => new Set(channelFilter.value));
+  const publishedTimeFilterSet = computed(() => new Set(publishedTimeFilter.value));
+  const publishedTimeTimestamps = computed(() => createPublishedTimeTimestampMap(videos.value));
+  const viewFilterBounds = computed(() => ({
+    min: minViewsFilter.value ? Number(minViewsFilter.value) : 0,
+    max: maxViewsFilter.value ? Number(maxViewsFilter.value) : Infinity,
+  }));
+  const durationFilterBounds = computed(() => ({
+    min: minDurationFilter.value ? Number(minDurationFilter.value) : 0,
+    max: maxDurationFilter.value ? Number(maxDurationFilter.value) : Infinity,
+  }));
+
+  const uniqueTitleWords = computed((): string[] => {
+    const words = new Set<string>();
+    for (const video of videos.value) {
+      for (const segment of video.title.split("|").slice(1)) {
+        const trimmed = segment.trim();
+        if (trimmed.length > 0) words.add(trimmed);
+      }
+    }
+    return [...words].sort();
+  });
+
   const uniqueChannels = computed((): string[] => {
-    const channels = videos.value.map((v: VideoData) => v.channel).filter(Boolean);
-    return [...new Set(channels)].sort();
+    const channels = new Set<string>();
+
+    for (const video of videos.value) {
+      if (video.channel) {
+        channels.add(video.channel);
+      }
+    }
+
+    return [...channels].sort((a, b) => textCollator.compare(a, b));
   });
 
   const uniquePublishedTimes = computed((): string[] => {
-    const dates = videos.value.map((v: VideoData) => v.publishedTime).filter(Boolean);
-    const now = Date.now();
-    return [...new Set(dates)].sort((a, b) => {
-      const timestampDiff = getPublishedTimeTimestamp(b, now) - getPublishedTimeTimestamp(a, now);
-      return timestampDiff || a.localeCompare(b);
-    });
+    const timestamps = publishedTimeTimestamps.value;
+
+    return [...timestamps.keys()].sort((a, b) => comparePublishedTimeLabels(a, b, timestamps));
   });
 
   const filteredVideos = computed((): VideoData[] => {
-    let filtered: VideoData[] = videos.value;
+    const channels = channelFilterSet.value;
+    const publishedTimes = publishedTimeFilterSet.value;
+    const timestamps = publishedTimeTimestamps.value;
+    const { min: minViews, max: maxViews } = viewFilterBounds.value;
+    const { min: minDuration, max: maxDuration } = durationFilterBounds.value;
+    const shouldFilterViews = Boolean(minViewsFilter.value || maxViewsFilter.value);
+    const shouldFilterDuration = Boolean(minDurationFilter.value || maxDurationFilter.value);
+    const titleWords = titleWordFilter.value;
 
-    if (channelFilter.value.length > 0) {
-      filtered = filtered.filter((video) => channelFilter.value.includes(video.channel));
-    }
+    const filtered = videos.value.filter((video) => {
+      if (channels.size > 0 && !channels.has(video.channel)) {
+        return false;
+      }
 
-    if (minViewsFilter.value || maxViewsFilter.value) {
-      const minViews = minViewsFilter.value ? Number(minViewsFilter.value) : 0;
-      const maxViews = maxViewsFilter.value ? Number(maxViewsFilter.value) : Infinity;
-      filtered = filtered.filter((video) => {
+      if (shouldFilterViews) {
         const viewsCount = video.viewsCount || 0;
-        return viewsCount >= minViews && viewsCount <= maxViews;
-      });
-    }
+        if (viewsCount < minViews || viewsCount > maxViews) {
+          return false;
+        }
+      }
 
-    if (publishedTimeFilter.value.length > 0) {
-      filtered = filtered.filter((video) => publishedTimeFilter.value.includes(video.publishedTime));
-    }
+      if (shouldFilterDuration) {
+        const durationInSeconds = video.durationInSeconds || 0;
+        if (durationInSeconds < minDuration || durationInSeconds > maxDuration) {
+          return false;
+        }
+      }
 
-    filtered = [...filtered].sort((a: VideoData, b: VideoData) => {
+      if (publishedTimes.size > 0 && !publishedTimes.has(video.publishedTime)) {
+        return false;
+      }
+
+      if (titleWords.length > 0) {
+        const segments = video.title.split("|").map((s) => s.trim());
+        if (titleWords.some((w) => segments.includes(w))) {
+          return false;
+        }
+      }
+
+      if (only4KFilter.value && !video.is4K) {
+        return false;
+      }
+
+      if (onlyOfficialFilter.value && !video.isOfficialChannel) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return filtered.sort((a: VideoData, b: VideoData) => {
       switch (sortBy.value) {
         case "duration":
           return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
         case "title":
-          return a.title.localeCompare(b.title);
+          return textCollator.compare(a.title, b.title);
         case "channel":
-          return a.channel.localeCompare(b.channel);
+          return textCollator.compare(a.channel, b.channel);
         case "views":
           return (b.viewsCount || 0) - (a.viewsCount || 0);
+        case "viewsPerDay":
+          return (b.viewsPerDay || 0) - (a.viewsPerDay || 0);
         case "publishedTime":
-          return getPublishedTimeTimestamp(b.publishedTime) - getPublishedTimeTimestamp(a.publishedTime);
+          return comparePublishedTimeLabels(a.publishedTime, b.publishedTime, timestamps);
         default:
           return 0;
       }
     });
+  });
 
-    return filtered;
+  const allFilteredSelected = computed((): boolean => {
+    const visible = filteredVideos.value;
+    const selected = selectedVideoIdSet.value;
+    return visible.length > 0 && visible.every((v) => selected.has(v.videoId));
+  });
+
+  const someFilteredSelected = computed((): boolean => {
+    const selected = selectedVideoIdSet.value;
+    return filteredVideos.value.some((v) => selected.has(v.videoId));
   });
 
   // Actions
+  function toggleVideoSelection(videoId: string): void {
+    const current = selectedVideoIds.value;
+    const idx = current.indexOf(videoId);
+    if (idx !== -1) {
+      selectedVideoIds.value = current.filter((id) => id !== videoId);
+    } else {
+      selectedVideoIds.value = [...current, videoId];
+    }
+  }
+
+  function toggleSelectAll(): void {
+    if (allFilteredSelected.value) {
+      const toRemove = new Set(filteredVideos.value.map((v) => v.videoId));
+      selectedVideoIds.value = selectedVideoIds.value.filter((id) => !toRemove.has(id));
+    } else {
+      const existing = new Set(selectedVideoIds.value);
+      const toAdd = filteredVideos.value.map((v) => v.videoId).filter((id) => !existing.has(id));
+      selectedVideoIds.value = [...selectedVideoIds.value, ...toAdd];
+    }
+  }
+
   async function loadFromStorage(): Promise<void> {
     const data = await chrome.storage.local.get(["videos"]);
-    videos.value = data.videos || [];
+    videos.value = Array.isArray(data.videos) ? data.videos : [];
+  }
+
+  function isScannablePage(url: string): boolean {
+    try {
+      return new URL(url).hostname === "www.youtube.com";
+    } catch {
+      return false;
+    }
   }
 
   async function checkCurrentTab(): Promise<void> {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab.url && tab.url.includes("youtube.com/results")) {
-        scanButtonText.value = "Scan Current Page";
-        canScan.value = true;
-      } else {
-        scanButtonText.value = "Navigate to YouTube Search";
-        canScan.value = false;
-      }
+      canScan.value = !!(tab.url && isScannablePage(tab.url));
     } catch (error) {
       console.error("Error checking current tab:", error);
     }
@@ -123,14 +256,14 @@ export const useVideoStore = defineStore("video", () => {
     isLoading.value = true;
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab.url || !tab.url.includes("youtube.com/results")) {
-        return "Please navigate to YouTube search results first";
+      if (!tab.url || !isScannablePage(tab.url)) {
+        return "Please navigate to a YouTube page with visible video links first";
       }
       const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanPage" });
       if (response.success) {
-        setTimeout(async () => {
-          await loadFromStorage();
-        }, 1000);
+        const scanned = await chrome.tabs.sendMessage(tab.id!, { action: "getVideos" });
+        videos.value = Array.isArray(scanned?.videos) ? scanned.videos : [];
+        await chrome.storage.local.set({ videos: videos.value });
         return null;
       }
       return "Scan failed";
@@ -142,15 +275,27 @@ export const useVideoStore = defineStore("video", () => {
   }
 
   async function addCurrentToQueue(): Promise<{ success: boolean; count?: number; error?: string }> {
-    if (filteredVideos.value.length === 0) {
+    const selected = selectedVideoIdSet.value;
+    const videosToQueue = selected.size > 0
+      ? filteredVideos.value.filter((v) => selected.has(v.videoId))
+      : filteredVideos.value;
+
+    if (videosToQueue.length === 0) {
       return { success: false, error: "No videos found" };
     }
     isLoading.value = true;
     try {
-      const response = await new Promise<any>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Request timeout")), 10000);
-        chrome.runtime.sendMessage(
-          { action: "addCurrentToQueue", videos: filteredVideos.value },
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab.id || !tab.url || !isScannablePage(tab.url)) {
+        return { success: false, error: "Please navigate to a YouTube page with visible video links first" };
+      }
+
+      const response = await new Promise<QueueResult>((resolve, reject) => {
+        const timeoutMs = Math.max(30000, videosToQueue.length * 2500);
+        const timeout = setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+        chrome.tabs.sendMessage(
+          tab.id,
+          { action: "addCurrentToQueue", videos: videosToQueue },
           (res) => {
             clearTimeout(timeout);
             if (chrome.runtime.lastError) {
@@ -161,10 +306,10 @@ export const useVideoStore = defineStore("video", () => {
           }
         );
       });
-      if (response?.success) {
-        return { success: true, count: response.count };
+      if (response.success) {
+        return { success: true, count: response.count, error: response.error };
       }
-      return { success: false, error: response?.error ?? "No response received" };
+      return { success: false, error: response.error ?? "No response received" };
     } catch (error) {
       return { success: false, error: (error as Error).message };
     } finally {
@@ -175,19 +320,31 @@ export const useVideoStore = defineStore("video", () => {
   return {
     // State
     videos,
+    selectedVideoIds,
     sortBy,
     channelFilter,
     minViewsFilter,
     maxViewsFilter,
+    minDurationFilter,
+    maxDurationFilter,
     publishedTimeFilter,
+    titleWordFilter,
+    only4KFilter,
+    onlyOfficialFilter,
     isLoading,
     canScan,
-    scanButtonText,
     // Computed
+    scanButtonText,
+    selectedVideoIdSet,
     uniqueChannels,
+    uniqueTitleWords,
     uniquePublishedTimes,
     filteredVideos,
+    allFilteredSelected,
+    someFilteredSelected,
     // Actions
+    toggleVideoSelection,
+    toggleSelectAll,
     loadFromStorage,
     checkCurrentTab,
     scanCurrentPage,

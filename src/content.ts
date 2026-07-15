@@ -1,5 +1,3 @@
-import $ from "jquery";
-
 interface VideoData {
   title: string;
   duration: string;
@@ -14,7 +12,23 @@ interface VideoData {
   durationInSeconds: number;
   viewsCount: number;
   isLong: boolean;
+  is4K: boolean;
+  isOfficialChannel: boolean;
+  viewsPerDay: number;
 }
+
+interface QueueVideo {
+  videoId: string;
+  title?: string;
+}
+
+interface QueueResult {
+  success: boolean;
+  count: number;
+  failed?: string[];
+  error?: string;
+}
+
 
 declare global {
   interface Window {
@@ -24,9 +38,32 @@ declare global {
 
 class YouTubeVideoScanner {
   videos: VideoData[];
+  scanDiagnostics: string[];
 
   constructor() {
     this.videos = [];
+    this.scanDiagnostics = [];
+  }
+
+  reportDiagnostic(message: string, context?: Record<string, string>): void {
+    const details = context ? ` ${JSON.stringify(context)}` : "";
+    const diagnostic = `[YouTube Queue Builder] ${message}${details}`;
+    this.scanDiagnostics.push(diagnostic);
+    console.warn(diagnostic);
+  }
+
+  publishedTimeToDays(publishedTime: string): number {
+    const normalized = publishedTime.trim().toLowerCase();
+    const match = normalized.match(/^(\d+)\s*([a-z]+)/);
+    if (!match) return 0;
+    const value = Number(match[1]);
+    const unit = match[2];
+    if (unit.startsWith("d")) return value;
+    if (unit.startsWith("w")) return value * 7;
+    if (unit.startsWith("mo")) return value * 30;
+    if (unit.startsWith("y")) return value * 365;
+    if (unit.startsWith("h")) return value / 24;
+    return 0;
   }
 
   parseDuration(durationText: string | undefined): number {
@@ -68,37 +105,66 @@ class YouTubeVideoScanner {
     return parseInt(cleanText) || 0;
   }
 
+  getChannelPageName(): { name: string; url: string } {
+    // channel-title is in the search result sidebar; on the channel page itself
+    // the channel name lives in ytd-channel-name#channel-title yt-formatted-string#text
+    const nameEl = document.querySelector<HTMLElement>("ytd-channel-name#channel-title yt-formatted-string#text");
+    if (nameEl) {
+      const name = nameEl.textContent?.trim() || "";
+      const href = nameEl.querySelector<HTMLAnchorElement>("a")?.getAttribute("href") || location.pathname.replace(/\/videos.*$/, "");
+      return { name, url: href };
+    }
+    // Fallback: parse the page <title> e.g. "Sony Music South - YouTube"
+    const name = document.title.replace(/\s*-\s*YouTube$/, "").trim() || "Unknown Channel";
+    return { name, url: location.pathname.replace(/\/videos.*$/, "") };
+  }
+
   extractVideoData(videoElement: Element): VideoData | null {
-    const $video = $(videoElement);
-    const $titleEl = $video.find("#video-title");
-    const $durationEl = $video.find(".ytBadgeShapeText").first();
-    const $channelEl = $video.find(".long-byline #text > a");
-    const $metaItems = $video.find(".inline-metadata-item");
-    const $viewsEl = $metaItems.eq(0);
-    const $timeEl = $metaItems.eq(1);
-    const $thumbnailEl = $video.find("yt-image img");
-    const $descriptionEl = $video.find(".metadata-snippet-text");
+    const badges = Array.from(videoElement.querySelectorAll<HTMLElement>(".ytBadgeShapeText"));
+    const durationEl = badges[0];
 
-    if ($titleEl.length === 0 || !$titleEl.attr("href")) return null;
+    // Channel page uses yt-lockup-view-model inside ytd-rich-item-renderer
+    const lockupTitleEl = videoElement.querySelector<HTMLAnchorElement>("a.ytLockupMetadataViewModelTitle");
+    const isChannelPage = !!lockupTitleEl;
 
-    const title = $titleEl.text().trim();
-    const duration = $durationEl.text().trim();
-    const url = $titleEl.attr("href") || "";
+    let title: string, url: string, thumbnail: string, views: string, publishedTime: string, description: string, channel: string, channelUrl: string;
+
+    if (isChannelPage) {
+      const h3 = videoElement.querySelector<HTMLElement>("h3.ytLockupMetadataViewModelHeadingReset");
+      title = h3?.getAttribute("title")?.trim() || lockupTitleEl?.textContent?.trim() || "";
+      url = lockupTitleEl?.getAttribute("href") || videoElement.querySelector<HTMLAnchorElement>("a.ytLockupViewModelContentImage")?.getAttribute("href") || "";
+      thumbnail = videoElement.querySelector<HTMLImageElement>(".ytThumbnailViewModelImage img")?.getAttribute("src") || "";
+      const metaSpans = Array.from(videoElement.querySelectorAll<HTMLElement>(".ytContentMetadataViewModelMetadataText"));
+      views = metaSpans[0]?.textContent?.trim() || "0 views";
+      publishedTime = metaSpans[1]?.textContent?.trim() || "Unknown";
+      description = "";
+      const channelInfo = this.getChannelPageName();
+      channel = channelInfo.name;
+      channelUrl = channelInfo.url;
+    } else {
+      const titleEl = videoElement.querySelector<HTMLAnchorElement>("#video-title");
+      if (!titleEl?.getAttribute("href")) return null;
+      title = titleEl.textContent?.trim() || "";
+      url = titleEl.getAttribute("href") || "";
+      thumbnail = videoElement.querySelector<HTMLImageElement>("yt-image img")?.getAttribute("src") || "";
+      const metaItems = Array.from(videoElement.querySelectorAll<HTMLElement>(".inline-metadata-item"));
+      views = metaItems[0]?.textContent?.trim() || "0 views";
+      publishedTime = metaItems[1]?.textContent?.trim() || "Unknown";
+      description = videoElement.querySelector<HTMLElement>(".metadata-snippet-text")?.textContent?.trim() || "";
+      const channelEl = videoElement.querySelector<HTMLAnchorElement>(".long-byline #text > a");
+      channel = channelEl ? channelEl.textContent?.trim() || "" : "Unknown Channel";
+      channelUrl = channelEl?.getAttribute("href") || "";
+    }
+
     const videoId = this.extractVideoId(url);
-    const channel =
-      $channelEl.length > 0 ? $channelEl.text().trim() : "Unknown Channel";
-    const channelUrl =
-      $channelEl.length > 0 ? $channelEl.attr("href") || "" : "";
-    const views = $viewsEl.length > 0 ? $viewsEl.text().trim() : "0 views";
-    const publishedTime =
-      $timeEl.length > 0 ? $timeEl.text().trim() : "Unknown";
-
-    const thumbnail =
-      $thumbnailEl.length > 0 ? $thumbnailEl.attr("src") || "" : "";
-    const description =
-      $descriptionEl.length > 0 ? $descriptionEl.text().trim() : "";
-
     if (!videoId) return null;
+
+    const duration = durationEl?.textContent?.trim() || "";
+    const is4K = badges.some((el) => el.textContent?.trim().toLowerCase() === "4k");
+    const isOfficialChannel = !!videoElement.querySelector("badge-shape[aria-label='Official Artist Channel']");
+    const viewsCount = this.parseViews(views);
+    const ageDays = this.publishedTimeToDays(publishedTime);
+    const viewsPerDay = ageDays > 0 ? Math.round(viewsCount / ageDays) : viewsCount;
 
     return {
       title,
@@ -112,35 +178,208 @@ class YouTubeVideoScanner {
       thumbnail,
       description,
       durationInSeconds: this.parseDuration(duration),
-      viewsCount: this.parseViews(views),
+      viewsCount,
       isLong: this.isLongVideo(duration),
+      is4K,
+      isOfficialChannel,
+      viewsPerDay,
     };
   }
 
   extractVideoId(url: string): string | null {
-    const match =
-      url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&]+)/);
-    return match ? match[1] : null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.pathname !== "/watch") return null;
+      return parsed.searchParams.get("v");
+    } catch {
+      this.reportDiagnostic("Unable to parse video link", { url });
+      return null;
+    }
+  }
+
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  getVideoLinks(): HTMLAnchorElement[] {
+    return Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="watch?v="]'));
+  }
+
+  findVideoCard(videoLink: HTMLAnchorElement, videoId: string): Element | null {
+    let current: Element | null = videoLink;
+    let fallback: Element | null = null;
+
+    while (current && current !== document.body) {
+      const matchingLinks = Array.from(current.querySelectorAll<HTMLAnchorElement>('a[href*="watch?v="]'))
+        .filter((link) => this.extractVideoId(link.href) === videoId);
+      const hasTitle = !!current.querySelector("#video-title, a.ytLockupMetadataViewModelTitle");
+
+      if (hasTitle && matchingLinks.length >= 2) return current;
+      if (!fallback && hasTitle && matchingLinks.length > 0) fallback = current;
+      current = current.parentElement;
+    }
+
+    if (fallback) return fallback;
+
+    this.reportDiagnostic("Could not resolve a video card from watch link", { videoId });
+    return null;
+  }
+
+  getVideoCards(): Element[] {
+    const cards: Element[] = [];
+    const seenIds = new Set<string>();
+
+    for (const link of this.getVideoLinks()) {
+      const videoId = this.extractVideoId(link.href);
+      if (!videoId || seenIds.has(videoId)) continue;
+
+      const card = this.findVideoCard(link, videoId);
+      if (card) {
+        seenIds.add(videoId);
+        cards.push(card);
+      }
+    }
+
+    return cards;
+  }
+
+  findVideoElement(videoId: string): Element | null {
+    const link = this.getVideoLinks().find((candidate) => this.extractVideoId(candidate.href) === videoId);
+    return link ? this.findVideoCard(link, videoId) : null;
+  }
+
+  findMenuButton(videoElement: Element): HTMLElement | null {
+    return videoElement.querySelector<HTMLElement>(
+      "ytd-menu-renderer yt-icon-button#button button, ytd-menu-renderer button[aria-label='Action menu'], ytd-menu-renderer button[aria-label='More actions'], ytd-menu-renderer button"
+    );
+  }
+
+  clickElement(element: HTMLElement): void {
+    element.scrollIntoView({ block: "center", inline: "nearest" });
+    element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
+    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+    element.click();
+  }
+
+  isVisible(element: Element): boolean {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  findAddToQueueMenuItem(): HTMLElement | null {
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>("tp-yt-paper-item[role='menuitem'], ytd-menu-service-item-renderer")
+    );
+
+    return items.find((item) => {
+      const title = item.querySelector("yt-formatted-string.title")?.textContent ?? item.textContent ?? "";
+      return title.trim().toLowerCase() === "add to queue" && this.isVisible(item);
+    }) ?? null;
+  }
+
+  async waitForElement(getElement: () => HTMLElement | null, timeoutMs = 2500): Promise<HTMLElement | null> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const element = getElement();
+      if (element) return element;
+      await this.sleep(100);
+    }
+
+    return null;
+  }
+
+  closeOpenMenu(): void {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  }
+
+  async addVideoToQueue(video: QueueVideo): Promise<boolean> {
+    const videoElement = this.findVideoElement(video.videoId);
+    if (!videoElement) return false;
+
+    const menuButton = this.findMenuButton(videoElement);
+    if (!menuButton) return false;
+
+    this.clickElement(menuButton);
+
+    const addToQueueItem = await this.waitForElement(() => this.findAddToQueueMenuItem());
+    if (!addToQueueItem) {
+      this.closeOpenMenu();
+      return false;
+    }
+
+    this.clickElement(addToQueueItem);
+    await this.sleep(500);
+    return true;
+  }
+
+  async addVideosToQueue(videos: QueueVideo[]): Promise<QueueResult> {
+    if (!videos.length) {
+      return { success: false, count: 0, error: "No videos to queue." };
+    }
+
+    this.scanCurrentPage();
+
+    const failed: string[] = [];
+    let count = 0;
+
+    for (const video of videos) {
+      const added = await this.addVideoToQueue(video);
+      if (added) {
+        count += 1;
+      } else {
+        failed.push(video.title || video.videoId);
+      }
+    }
+
+    if (count === 0) {
+      return {
+        success: false,
+        count,
+        failed,
+        error: "Could not find YouTube's Add to queue action for the selected videos.",
+      };
+    }
+
+    return {
+      success: true,
+      count,
+      failed: failed.length > 0 ? failed : undefined,
+      error: failed.length > 0 ? `${failed.length} videos could not be queued because their menu item was not found.` : undefined,
+    };
+  }
+
+  isChannelVideosPage(): boolean {
+    return /^\/@[^/]+\/videos/.test(location.pathname);
+  }
+
+  isYouTubePage(): boolean {
+    return location.hostname === "www.youtube.com";
   }
 
   scanCurrentPage(): void {
-    const $videoContainers = $("ytd-video-renderer");
+    this.scanDiagnostics = [];
+    const videoCards = this.getVideoCards();
     const videos: VideoData[] = [];
 
-    $videoContainers.each((index, container) => {
-      const data = this.extractVideoData(container);
-      if (data) videos.push(data);
+    videoCards.forEach((card) => {
+      const data = this.extractVideoData(card);
+      if (data) {
+        videos.push(data);
+      } else {
+        this.reportDiagnostic("Skipped a video card because required metadata was missing");
+      }
     });
 
     this.videos = videos;
-    chrome.runtime.sendMessage({ action: "videosFound", videos });
+    console.debug(`[YouTube Queue Builder] Scan complete: ${videos.length} videos, ${this.scanDiagnostics.length} diagnostics`);
   }
 
   init(): void {
-    if (location.pathname === "/results") {
-      // Wait for page to be fully loaded
+    if (this.isYouTubePage()) {
       if (document.readyState === "loading") {
-        $(document).ready(() => this.setupScanning());
+        document.addEventListener("DOMContentLoaded", () => this.setupScanning(), { once: true });
       } else {
         this.setupScanning();
       }
@@ -149,22 +388,32 @@ class YouTubeVideoScanner {
 
   setupScanning(): void {
     this.scanCurrentPage();
-    const $contentsEl = $("#contents");
-    if ($contentsEl.length > 0) {
-      const observer = new MutationObserver(() => this.scanCurrentPage());
-      observer.observe($contentsEl[0], { childList: true, subtree: true });
+    const observationRoot = document.querySelector<HTMLElement>("#contents") || document.body;
+    if (observationRoot) {
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      const observer = new MutationObserver(() => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => this.scanCurrentPage(), 500);
+      });
+      observer.observe(observationRoot, { childList: true, subtree: true });
     }
   }
 }
 
 // Initialize when DOM is ready
-$(document).ready(function () {
+const initializeScanner = () => {
   const scanner = new YouTubeVideoScanner();
   scanner.init();
 
   // Make scanner available globally for message listener
   window.youtubeScanner = scanner;
-});
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeScanner, { once: true });
+} else {
+  initializeScanner();
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
@@ -173,6 +422,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
     } else if (request.action === "getVideos" && window.youtubeScanner) {
       sendResponse({ videos: window.youtubeScanner.videos });
+    } else if (request.action === "addCurrentToQueue" && window.youtubeScanner) {
+      window.youtubeScanner.addVideosToQueue(request.videos ?? []).then(sendResponse);
+      return true;
     } else {
       sendResponse({
         success: false,

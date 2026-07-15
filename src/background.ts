@@ -44,9 +44,6 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((request, _, sendResponse) => {
   if (request.action === "test") {
     sendResponse({ success: true, message: "Background script is working" });
-  } else if (request.action === "videosFound") {
-    chrome.storage.local.set({ videos: request.videos });
-    sendResponse({ success: true });
   } else if (request.action === "addCurrentToQueue") {
     addCurrentVideosToQueue(request.videos).then(sendResponse);
     return true;
