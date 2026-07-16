@@ -9,11 +9,17 @@ interface Props {
 const props = defineProps<Props>();
 const store = useVideoStore();
 
+const formatDuration = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const mm = String(m).padStart(h ? 2 : 1, "0");
+    const ss = String(s).padStart(2, "0");
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+};
+
 const openVideo = (): void => {
-    const url = props.video.url.startsWith("http")
-        ? props.video.url
-        : `https://www.youtube.com${props.video.url}`;
-    window.open(url, "_blank");
+    window.open(`https://www.youtube.com/watch?v=${props.video.videoId}`, "_blank");
 };
 </script>
 
@@ -43,7 +49,7 @@ const openVideo = (): void => {
                 <div class="mb-1 flex items-center gap-1.5 text-[11px] leading-none text-slate-650 dark:text-slate-350">
                     <span
                         class="rounded bg-slate-100 dark:bg-slate-800 border border-slate-200/30 dark:border-slate-700/50 px-1 py-0.5 font-mono text-[9px] font-bold leading-none text-slate-700 dark:text-slate-300">{{
-                            video.duration }}</span>
+                            formatDuration(video.duration) }}</span>
                     <span class="truncate font-semibold text-slate-700 dark:text-slate-300">{{ video.channel }}</span>
                 </div>
                 <div class="flex items-center gap-1 text-[10px] leading-none text-slate-500 dark:text-slate-400">

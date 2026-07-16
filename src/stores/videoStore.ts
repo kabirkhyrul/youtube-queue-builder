@@ -142,14 +142,14 @@ export const useVideoStore = defineStore("video", () => {
       }
 
       if (shouldFilterViews) {
-        const viewsCount = video.viewsCount || 0;
+        const viewsCount = video.views || 0;
         if (viewsCount < minViews || viewsCount > maxViews) {
           return false;
         }
       }
 
       if (shouldFilterDuration) {
-        const durationInSeconds = video.durationInSeconds || 0;
+        const durationInSeconds = video.duration || 0;
         if (durationInSeconds < minDuration || durationInSeconds > maxDuration) {
           return false;
         }
@@ -166,10 +166,6 @@ export const useVideoStore = defineStore("video", () => {
         }
       }
 
-      if (only4KFilter.value && !video.is4K) {
-        return false;
-      }
-
       if (onlyOfficialFilter.value && !video.isOfficialChannel) {
         return false;
       }
@@ -180,15 +176,22 @@ export const useVideoStore = defineStore("video", () => {
     return filtered.sort((a: VideoData, b: VideoData) => {
       switch (sortBy.value) {
         case "duration":
-          return (b.durationInSeconds || 0) - (a.durationInSeconds || 0);
+          return (b.duration || 0) - (a.duration || 0);
         case "title":
           return textCollator.compare(a.title, b.title);
         case "channel":
           return textCollator.compare(a.channel, b.channel);
         case "views":
-          return (b.viewsCount || 0) - (a.viewsCount || 0);
-        case "viewsPerDay":
-          return (b.viewsPerDay || 0) - (a.viewsPerDay || 0);
+          return (b.views || 0) - (a.views || 0);
+        case "viewsPerDay": {
+          const msPerDay = 86_400_000;
+          const now = Date.now();
+          const ageA = now - (timestamps.get(a.publishedTime) ?? now);
+          const ageB = now - (timestamps.get(b.publishedTime) ?? now);
+          const daysA = Math.max(ageA / msPerDay, 1);
+          const daysB = Math.max(ageB / msPerDay, 1);
+          return (b.views / daysB) - (a.views / daysA);
+        }
         case "publishedTime":
           return comparePublishedTimeLabels(a.publishedTime, b.publishedTime, timestamps);
         default:
@@ -259,10 +262,9 @@ export const useVideoStore = defineStore("video", () => {
       if (!tab.url || !isScannablePage(tab.url)) {
         return "Please navigate to a YouTube page with visible video links first";
       }
-      const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanPage" });
-      if (response.success) {
-        const scanned = await chrome.tabs.sendMessage(tab.id!, { action: "getVideos" });
-        videos.value = Array.isArray(scanned?.videos) ? scanned.videos : [];
+      const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanVideos" });
+      if (response?.success) {
+        videos.value = Array.isArray(response.videos) ? response.videos : [];
         await chrome.storage.local.set({ videos: videos.value });
         return null;
       }

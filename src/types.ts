@@ -1,18 +1,11 @@
 export interface VideoData {
   title: string;
-  duration: string;
-  url: string;
+  duration: number; // in seconds
   videoId: string;
   channel: string;
-  channelUrl: string;
-  views: string;
-  publishedTime: string;
-  thumbnail: string;
+  views: number;
+  publishedTime: string; // js timestamp
+  thumbnail: string; // img url
   description: string;
-  durationInSeconds: number;
-  viewsCount: number;
-  isLong: boolean;
-  is4K: boolean;
   isOfficialChannel: boolean;
-  viewsPerDay: number;
 }
