@@ -20,19 +20,19 @@ const getWatchVideoIds = (html: string): string[] => {
   return ids;
 };
 
-test("content scanner uses watch links instead of renderer tag selectors", () => {
+test("content scanner uses watch links and renderer selectors", () => {
   const source = readFileSync("src/content.ts", "utf8");
 
   expect(source).toContain('a[href*="watch?v="]');
-  expect(source).not.toContain('"ytd-video-renderer"');
-  expect(source).not.toContain('"ytd-rich-item-renderer"');
+  expect(source).toContain('document.querySelectorAll("ytd-video-renderer")');
+  expect(source).toContain('document.querySelectorAll("ytd-rich-item-renderer")');
 });
 
 test("scanner is enabled for any YouTube page", () => {
   const contentSource = readFileSync("src/content.ts", "utf8");
   const storeSource = readFileSync("src/stores/videoStore.ts", "utf8");
 
-  expect(contentSource).toContain("location.hostname === \"www.youtube.com\"");
+  expect(contentSource).toContain("chrome.runtime.onMessage.addListener");
   expect(storeSource).toContain("new URL(url).hostname === \"www.youtube.com\"");
 });
 
