@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Queue Builder",
-  "version": "1.0",
+  "version": "1.0.1",
   "description": "Scan YouTube search results, organize videos with smart filtering and sorting, then create custom playlists instantly",
   "permissions": ["activeTab", "tabs", "storage", "alarms", "sidePanel"],
   "host_permissions": ["https://www.youtube.com/*"],

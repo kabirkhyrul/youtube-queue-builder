@@ -1,6 +1,6 @@
 {
   "name": "youtube-queue-builder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Chrome extension that scans YouTube search results, organizes videos with smart filtering and sorting, then creates custom playlists instantly",
   "type": "module",
   "scripts": {
