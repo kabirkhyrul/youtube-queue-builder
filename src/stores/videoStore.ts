@@ -21,7 +21,41 @@ const publishedTimeUnits = [
   { keys: ["year", "years", "yr", "yrs", "y"], ms: 1000 * 60 * 60 * 24 * 365 },
 ];
 
-const textCollator = new Intl.Collator(undefined, { sensitivity: "base" });
+const textCollator = new Intl.Collator(["bn-BD", "bn", "en"], {
+  sensitivity: "variant",
+  numeric: true,
+});
+
+function normalizeForComparison(text: string): string {
+  if (!text) return "";
+  const normalized = text.normalize("NFC").trim();
+  const stripped = normalized.replace(/^[^\p{L}\p{N}]+/u, "");
+  return stripped || normalized;
+}
+
+function compareText(a: string, b: string): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const normA = normalizeForComparison(a);
+  const normB = normalizeForComparison(b);
+  const result = textCollator.compare(normA, normB);
+  if (result !== 0) return result;
+  return textCollator.compare(a, b);
+}
+
+function deduplicateVideos(items: VideoData[]): VideoData[] {
+  const seen = new Set<string>();
+  const result: VideoData[] = [];
+  for (const item of items) {
+    if (!item || !item.videoId) continue;
+    if (!seen.has(item.videoId)) {
+      seen.add(item.videoId);
+      result.push(item);
+    }
+  }
+  return result;
+}
 
 const getPublishedTimeTimestamp = (publishedTime: string, now = Date.now()): number => {
   const normalized = publishedTime.trim().toLowerCase();
@@ -59,7 +93,7 @@ const comparePublishedTimeLabels = (a: string, b: string, timestamps: Map<string
   const timestampB = timestamps.get(b) ?? Number.NEGATIVE_INFINITY;
 
   if (timestampA === timestampB) {
-    return textCollator.compare(a, b);
+    return compareText(a, b);
   }
 
   return timestampB - timestampA;
@@ -79,6 +113,7 @@ export const useVideoStore = defineStore("video", () => {
   const titleWordFilter = ref<string[]>([]);
   const only4KFilter = ref<boolean>(false);
   const onlyOfficialFilter = ref<boolean>(false);
+  const onlyVerifiedFilter = ref<boolean>(false);
   const isLoading = ref<boolean>(false);
   const canScan = ref<boolean>(false);
   const scanButtonText = computed(() => (canScan.value ? "Scan Current Page" : "Navigate to YouTube Search or Channel Videos"));
@@ -105,7 +140,7 @@ export const useVideoStore = defineStore("video", () => {
         if (trimmed.length > 0) words.add(trimmed);
       }
     }
-    return [...words].sort();
+    return [...words].sort(compareText);
   });
 
   const uniqueChannels = computed((): string[] => {
@@ -113,11 +148,14 @@ export const useVideoStore = defineStore("video", () => {
 
     for (const video of videos.value) {
       if (video.channel) {
-        channels.add(video.channel);
+        const trimmed = video.channel.trim();
+        if (trimmed) {
+          channels.add(trimmed);
+        }
       }
     }
 
-    return [...channels].sort((a, b) => textCollator.compare(a, b));
+    return [...channels].sort(compareText);
   });
 
   const uniquePublishedTimes = computed((): string[] => {
@@ -136,7 +174,7 @@ export const useVideoStore = defineStore("video", () => {
     const shouldFilterDuration = Boolean(minDurationFilter.value || maxDurationFilter.value);
     const titleWords = titleWordFilter.value;
 
-    const filtered = videos.value.filter((video) => {
+    const filtered = deduplicateVideos(videos.value).filter((video) => {
       if (channels.size > 0 && !channels.has(video.channel)) {
         return false;
       }
@@ -170,6 +208,10 @@ export const useVideoStore = defineStore("video", () => {
         return false;
       }
 
+      if (onlyVerifiedFilter.value && !video.isVerifiedChannel) {
+        return false;
+      }
+
       return true;
     });
 
@@ -178,9 +220,9 @@ export const useVideoStore = defineStore("video", () => {
         case "duration":
           return (b.duration || 0) - (a.duration || 0);
         case "title":
-          return textCollator.compare(a.title, b.title);
+          return compareText(a.title, b.title);
         case "channel":
-          return textCollator.compare(a.channel, b.channel);
+          return compareText(a.channel, b.channel);
         case "views":
           return (b.views || 0) - (a.views || 0);
         case "viewsPerDay": {
@@ -235,7 +277,7 @@ export const useVideoStore = defineStore("video", () => {
 
   async function loadFromStorage(): Promise<void> {
     const data = await chrome.storage.local.get(["videos"]);
-    videos.value = Array.isArray(data.videos) ? data.videos : [];
+    videos.value = deduplicateVideos(Array.isArray(data.videos) ? data.videos : []);
   }
 
   function isScannablePage(url: string): boolean {
@@ -264,7 +306,7 @@ export const useVideoStore = defineStore("video", () => {
       }
       const response = await chrome.tabs.sendMessage(tab.id!, { action: "scanVideos" });
       if (response?.success) {
-        videos.value = Array.isArray(response.videos) ? response.videos : [];
+        videos.value = deduplicateVideos(Array.isArray(response.videos) ? response.videos : []);
         await chrome.storage.local.set({ videos: videos.value });
         return null;
       }
@@ -333,6 +375,7 @@ export const useVideoStore = defineStore("video", () => {
     titleWordFilter,
     only4KFilter,
     onlyOfficialFilter,
+    onlyVerifiedFilter,
     isLoading,
     canScan,
     // Computed

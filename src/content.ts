@@ -32,7 +32,7 @@ function extractFromSearchCard(card: Element): VideoData | null {
 
   // title
   const titleEl = card.querySelector<HTMLElement>("a#video-title");
-  const title = titleEl?.getAttribute("title")?.trim() ?? "";
+  const title = (titleEl?.getAttribute("title") ?? titleEl?.textContent ?? "").trim();
 
   // duration — first badge text that looks like a timestamp
   const durationText = Array.from(card.querySelectorAll(".ytBadgeShapeText"))
@@ -68,7 +68,12 @@ function extractFromSearchCard(card: Element): VideoData | null {
     '[aria-label="Official Artist Channel"]'
   );
 
-  return { videoId, title, duration, channel, views, publishedTime, thumbnail, description, isOfficialChannel };
+  // isVerifiedChannel
+  const isVerifiedChannel = !!card.querySelector(
+    '[aria-label="Verified"], [aria-label="Verified channel"]'
+  );
+
+  return { videoId, title, duration, channel, views, publishedTime, thumbnail, description, isOfficialChannel, isVerifiedChannel };
 }
 
 function extractFromRichCard(card: Element): VideoData | null {
@@ -84,7 +89,7 @@ function extractFromRichCard(card: Element): VideoData | null {
 
   // title
   const titleEl = card.querySelector<HTMLElement>("h3.ytLockupMetadataViewModelHeadingReset");
-  const title = titleEl?.getAttribute("title")?.trim() ?? "";
+  const title = (titleEl?.getAttribute("title") ?? titleEl?.textContent ?? "").trim();
 
   // duration
   const durationText = Array.from(card.querySelectorAll(".ytBadgeShapeText"))
@@ -114,28 +119,36 @@ function extractFromRichCard(card: Element): VideoData | null {
 
   // isOfficialChannel — badge not present on homepage/channel rich cards
   const isOfficialChannel = false;
+  const isVerifiedChannel = false;
 
-  return { videoId, title, duration, channel, views, publishedTime, thumbnail, description, isOfficialChannel };
+  return { videoId, title, duration, channel, views, publishedTime, thumbnail, description, isOfficialChannel, isVerifiedChannel };
 }
 
 // ── scanner ───────────────────────────────────────────────────────────────────
 
 function scanPage(): VideoData[] {
-  const searchCards = document.querySelectorAll("ytd-video-renderer");
-  if (searchCards.length > 0) {
-    return Array.from(searchCards)
-      .map(extractFromSearchCard)
-      .filter((v): v is VideoData => v !== null);
+  const seen = new Set<string>();
+  const results: VideoData[] = [];
+
+  const addVideo = (video: VideoData | null) => {
+    if (!video || !video.videoId || seen.has(video.videoId)) return;
+    seen.add(video.videoId);
+    results.push(video);
+  };
+
+  const searchCards = document.querySelectorAll(
+    "ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer, ytd-playlist-video-renderer"
+  );
+  for (const card of searchCards) {
+    addVideo(extractFromSearchCard(card));
   }
 
   const richCards = document.querySelectorAll("ytd-rich-item-renderer");
-  if (richCards.length > 0) {
-    return Array.from(richCards)
-      .map(extractFromRichCard)
-      .filter((v): v is VideoData => v !== null);
+  for (const card of richCards) {
+    addVideo(extractFromRichCard(card));
   }
 
-  return [];
+  return results;
 }
 
 // ── queue actions ─────────────────────────────────────────────────────────────
@@ -214,8 +227,14 @@ async function addVideoToQueue(video: QueueVideo): Promise<boolean> {
 }
 
 async function addVideosToQueue(videos: QueueVideo[]): Promise<{ success: boolean; count: number; error?: string }> {
+  const seen = new Set<string>();
+  const uniqueVideos = videos.filter((v) => {
+    if (!v.videoId || seen.has(v.videoId)) return false;
+    seen.add(v.videoId);
+    return true;
+  });
   let count = 0;
-  for (const video of videos) {
+  for (const video of uniqueVideos) {
     if (await addVideoToQueue(video)) count += 1;
   }
   return count > 0

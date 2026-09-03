@@ -45,7 +45,8 @@ const hasActiveFilters = computed(() => {
          store.minDurationFilter !== "" ||
          store.maxDurationFilter !== "" ||
          store.only4KFilter ||
-         store.onlyOfficialFilter;
+         store.onlyOfficialFilter ||
+         store.onlyVerifiedFilter;
 });
 
 const clearAllFilters = () => {
@@ -58,6 +59,7 @@ const clearAllFilters = () => {
   store.maxDurationFilter = "";
   store.only4KFilter = false;
   store.onlyOfficialFilter = false;
+  store.onlyVerifiedFilter = false;
 };
 
 onMounted(() => {
@@ -121,6 +123,11 @@ onMounted(() => {
             class="checkbox-custom" />
           <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Official</span>
         </label>
+        <label class="flex cursor-pointer items-center gap-1.5">
+          <input type="checkbox" v-model="store.onlyVerifiedFilter"
+            class="checkbox-custom" />
+          <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Verified</span>
+        </label>
       </div>
 
       <!-- Active dismissible pills -->
@@ -153,6 +160,10 @@ onMounted(() => {
         <span v-if="store.onlyOfficialFilter" class="pill-filter">
           Official
           <button @click="store.onlyOfficialFilter = false" class="hover:text-red-500 dark:hover:text-red-400 font-bold ml-0.5 cursor-pointer">×</button>
+        </span>
+        <span v-if="store.onlyVerifiedFilter" class="pill-filter">
+          Verified
+          <button @click="store.onlyVerifiedFilter = false" class="hover:text-red-500 dark:hover:text-red-400 font-bold ml-0.5 cursor-pointer">×</button>
         </span>
         <button @click="clearAllFilters" class="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 ml-auto cursor-pointer self-center">
           Clear All

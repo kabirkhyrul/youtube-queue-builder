@@ -8,4 +8,5 @@ export interface VideoData {
   thumbnail: string; // img url
   description: string;
   isOfficialChannel: boolean;
+  isVerifiedChannel: boolean;
 }
