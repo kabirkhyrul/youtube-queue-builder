@@ -9,11 +9,18 @@ function parseDuration(text: string): number {
   return 0;
 }
 
+// search results render a bare count ("21M"); homepage/channel cards add "views"
+const viewsPattern = /^([\d.,]+)\s*([KMB]?)(?:\s*views?)?$/i;
+
+function isViewsText(text: string): boolean {
+  return viewsPattern.test(text.trim());
+}
+
 function parseViews(text: string): number {
-  const m = text.match(/([\d.]+)\s*([KMBkmb]?)\s*views?/i);
+  const m = text.trim().match(viewsPattern);
   if (!m) return 0;
   const mult: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };
-  return Math.round(parseFloat(m[1]) * (mult[m[2].toLowerCase()] ?? 1));
+  return Math.round(parseFloat(m[1].replace(/,/g, "")) * (mult[m[2].toLowerCase()] ?? 1));
 }
 
 function parsePublishedTime(text: string): string {
@@ -48,7 +55,7 @@ function extractFromSearchCard(card: Element): VideoData | null {
   const metaSpans = Array.from(
     card.querySelectorAll<HTMLElement>("span.inline-metadata-item")
   ).map((el) => el.textContent?.trim() ?? "");
-  const viewsRaw = metaSpans.find((s) => /views?/i.test(s)) ?? "";
+  const viewsRaw = metaSpans.find(isViewsText) ?? "";
   const timeRaw = metaSpans.find((s) => /ago/i.test(s)) ?? "";
   const views = parseViews(viewsRaw);
   const publishedTime = parsePublishedTime(timeRaw);
@@ -105,7 +112,7 @@ function extractFromRichCard(card: Element): VideoData | null {
   const metaSpans = Array.from(
     card.querySelectorAll<HTMLElement>("span.ytContentMetadataViewModelMetadataText")
   ).map((el) => el.textContent?.trim() ?? "");
-  const viewsRaw = metaSpans.find((s) => /views?/i.test(s)) ?? "";
+  const viewsRaw = metaSpans.find(isViewsText) ?? "";
   const timeRaw = metaSpans.find((s) => /ago/i.test(s)) ?? "";
   const views = parseViews(viewsRaw);
   const publishedTime = parsePublishedTime(timeRaw);

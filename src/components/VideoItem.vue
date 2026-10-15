@@ -18,6 +18,14 @@ const formatDuration = (seconds: number): string => {
     return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
 
+const formatViews = (views: number): string => {
+    if (!views) return "";
+    if (views >= 1e9) return `${+(views / 1e9).toFixed(1)}B views`;
+    if (views >= 1e6) return `${+(views / 1e6).toFixed(1)}M views`;
+    if (views >= 1e3) return `${+(views / 1e3).toFixed(1)}K views`;
+    return `${views} views`;
+};
+
 const openVideo = (): void => {
     window.open(`https://www.youtube.com/watch?v=${props.video.videoId}`, "_blank");
 };
@@ -53,7 +61,7 @@ const openVideo = (): void => {
                     <span class="truncate font-semibold text-slate-700 dark:text-slate-300">{{ video.channel }}</span>
                 </div>
                 <div class="flex items-center gap-1 text-[10px] leading-none text-slate-500 dark:text-slate-400">
-                    <span class="truncate">{{ video.views }}</span>
+                    <span class="truncate">{{ formatViews(video.views) }}</span>
                     <span v-if="video.views && video.publishedTime" class="text-slate-350 dark:text-slate-750 font-bold">•</span>
                     <span class="truncate">{{ video.publishedTime }}</span>
                 </div>
